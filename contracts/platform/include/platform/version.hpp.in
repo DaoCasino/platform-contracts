@@ -1,0 +1,5 @@
+#include <string>
+
+namespace platform {
+    static const std::string CONTRACT_VERSION = "${CONTRACT_VERSION}";
+} // namespace platform
