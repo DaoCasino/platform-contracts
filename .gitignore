@@ -1,0 +1,6 @@
+/build/
+*.sw[op]
+.DS_Store
+/.idea/
+/tags
+
