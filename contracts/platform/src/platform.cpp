@@ -54,7 +54,7 @@ void platform::add_game(name contract, uint16_t params_cnt, bytes meta) {
 
     games.emplace(get_self(), [&](auto& row) {
         row.id = games.available_primary_key(); // <-- auto-increment id
-        row.paused = false; // enabled by default
+        row.paused = false; // <-- enabled by default
         row.params_cnt = params_cnt;
         row.contract = contract;
         row.meta = std::move(meta);

@@ -86,4 +86,28 @@ private:
 };
 
 
+// external non-writing functions
+namespace read {
+
+static bool is_active_casino(name platform_contract, uint64_t casino_id) {
+    casino_table casinos(platform_contract, platform_contract.value);
+    const auto casino_itr = casinos.find(casino_id);
+    if (casino_itr == casinos.end()) {
+        return false;
+    }
+    return !(casino_itr->paused);
+}
+
+static bool is_active_game(name platform_contract, uint64_t game_id) {
+    game_table games(platform_contract, platform_contract.value);
+    const auto game_itr = games.find(game_id);
+    if (game_itr == games.end()) {
+        return false;
+    }
+    return !(game_itr->paused);
+}
+
+} // namespace read
+
+
 } // namespace platform
