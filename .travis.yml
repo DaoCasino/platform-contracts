@@ -1,0 +1,27 @@
+language: c
+git:
+  depth: false
+services:
+  - docker
+matrix:
+  fast_finish: true
+jobs:
+  include:
+    - stage: build
+      script:
+        - set -e
+        - rm -rf build
+        - ./cicd/run build
+        - ./cicd/run test
+        - ./cicd/run pack
+
+deploy:
+  provider: releases
+  api_key:
+    secure: "QHb09WLVuqiT4mGkO8ipOIcbU211rlT6WXUnWXBxfCzsTP4qRvv6/QBoloILO9uAB3COjgg9n6tGe1vQuT/fLwpvx9TpvxSR92r50dx/LaiXAsalDGm3RZcLwLwsMUsiUjOM6p4TSfFb1N4MtX41E+MD34PA8U5pjxmMkneyhxJ6vVKQbA8B27JNURsEf3NIp7tehJmFecskFgB7OGaL5jUGnutQVx+g96VPchY1JAeM3WuGX39YLnYCOFNZhpiXZpV9Kv7m8kCxGdWW6UIvD1vXGxa/ctYSqbOOkobvdgWFgjVdW71Fjaj92fgXPgJTmaVrFRc4S+iLzql30mQ9tOIOxEcOv2VkbtzFAJ9C++ifA2mQDIHj7ZNXRobDuZ6CcXYjJWHLWDBMeq58vIajldsbnQ6qVejrpWrcYXrNZ3w0lwV9PmrrBGnVJDdEjHOSIQI2bJpbYiRXMdk60udRItaP+QqjodAJi/T2rY2dEKIT7BzKAZToRTVqv/o4p175m+6i9jGt723hRN0Y6UtQVHOQQ0QZWUWDYbelX1G4IAk03OdkCRQd+ryuu1UjteT+7AWoVh8+kL7cOiTK17inlAA2wyG2hV69Stnuow5+C44qJDVMINZr3BjuNyQuacXBNI/myWKYD1ETCc7exGEMhceJwdx0tRuktT4TBU0O47Y="
+  file_glob: true
+  file: build/assets/*
+  skip_cleanup: true
+  overwrite: true
+  on:
+    tags: true
