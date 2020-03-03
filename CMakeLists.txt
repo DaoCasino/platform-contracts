@@ -5,6 +5,8 @@ project(platform_contracts)
 include(ExternalProject)
 find_package(eosio.cdt)
 
+set(EOSIO_CDT_VERSION_MIN "1.6.3")
+set(EOSIO_CDT_VERSION_SOFT_MAX "1.6.3")
 
 execute_process(COMMAND git describe --tags --always --dirty
     OUTPUT_VARIABLE GIT_TAG_RAW

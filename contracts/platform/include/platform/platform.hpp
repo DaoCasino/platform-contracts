@@ -3,14 +3,36 @@
 
 namespace platform {
 
-struct [[eosio::table("version")]] version_row {
+
+using bytes = std::vector<char>;
+using eosio::name;
+
+
+struct [[eosio::table("version"), eosio::contract("platform")]] version_row {
     std::string version;
 };
 using version_sigleton = eosio::singleton<"version"_n, version_row>;
 
+struct [[eosio::table("casino"), eosio::contract("platform")]] casino_row {
+    uint64_t id;
+    name contract;
+    bool paused;
+    bytes meta;
 
-using bytes = std::vector<char>;
-using eosio::name;
+    uint64_t primary_key() const { return id; }
+};
+using casino_table = eosio::multi_index<"casino"_n, casino_row>;
+
+struct [[eosio::table("game"), eosio::contract("platform")]] game_row {
+    uint64_t id;
+    name contract;
+    uint16_t params_cnt;
+    bool paused;
+    bytes meta;
+
+    uint64_t primary_key() const { return id; }
+};
+using game_table = eosio::multi_index<"game"_n, game_row>;
 
 
 class [[eosio::contract("platform")]] platform: public eosio::contract {
@@ -19,7 +41,9 @@ public:
 
     platform(name receiver, name code, eosio::datastream<const char*> ds):
         contract(receiver, code, ds),
-        version(_self, _self.value)
+        version(_self, _self.value),
+        casinos(_self, _self.value),
+        games(_self, _self.value)
     {
         version.set(version_row {CONTRACT_VERSION}, _self);
     }
@@ -39,8 +63,26 @@ public:
     [[eosio::action("setmetacas")]]
     void set_meta_casino(uint64_t id, bytes meta);
 
+
+    [[eosio::action("addgame")]]
+    void add_game(name contract, uint16_t params_cnt, bytes meta);
+
+    [[eosio::action("delgame")]]
+    void del_game(uint64_t id);
+
+    [[eosio::action("pausegame")]]
+    void pause_game(uint64_t id, bool pause);
+
+    [[eosio::action("setcontrgame")]]
+    void set_contract_game(uint64_t id, name contract);
+
+    [[eosio::action("setmetagame")]]
+    void set_meta_game(uint64_t id, bytes meta);
+
 private:
     version_sigleton version;
+    casino_table casinos;
+    game_table games;
 };
 
 
