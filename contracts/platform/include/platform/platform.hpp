@@ -3,6 +3,8 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 
+#include <platform/version.hpp>
+
 namespace platform {
 
 
