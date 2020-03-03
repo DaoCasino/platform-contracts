@@ -49,7 +49,7 @@ public:
     }
 
     [[eosio::action("addcas")]]
-    void add_casino(name contract, uint16_t params_cnt, bytes meta);
+    void add_casino(name contract, bytes meta);
 
     [[eosio::action("delcas")]]
     void del_casino(uint64_t id);
