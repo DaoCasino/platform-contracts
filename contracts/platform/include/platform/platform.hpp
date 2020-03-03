@@ -15,7 +15,7 @@ using eosio::name;
 struct [[eosio::table("version"), eosio::contract("platform")]] version_row {
     std::string version;
 };
-using version_sigleton = eosio::singleton<"version"_n, version_row>;
+using version_singleton = eosio::singleton<"version"_n, version_row>;
 
 struct [[eosio::table("casino"), eosio::contract("platform")]] casino_row {
     uint64_t id;
@@ -84,7 +84,7 @@ public:
     void set_meta_game(uint64_t id, bytes meta);
 
 private:
-    version_sigleton version;
+    version_singleton version;
     casino_table casinos;
     game_table games;
 };
