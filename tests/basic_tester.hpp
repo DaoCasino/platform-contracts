@@ -53,6 +53,13 @@ public:
     void deploy_contract(account_name account) {
         set_code(account, Contract::wasm() );
         set_abi(account, Contract::abi().data() );
+
+        abi_def abi;
+        abi_serializer abi_s;
+        const auto& accnt = control->db().get<account_object,by_name>(account);
+        abi_serializer::to_abi(accnt.abi, abi);
+        abi_s.set_abi(abi, abi_serializer_max_time);
+        abi_ser.insert({ account, abi_s });
     }
 
     void create_currency( const name& contract, const name& manager, const asset& maxsupply ) {
@@ -77,6 +84,9 @@ public:
                                 ("quantity", amount)
                                 ("memo",     "") );
     }
+
+public:
+    std::map<account_name, abi_serializer> abi_ser;
 };
 
 } // namespace testing
