@@ -15,6 +15,14 @@ execute_process(COMMAND git describe --tags --always --dirty
 string(STRIP ${GIT_TAG_RAW} VERSION_FULL)
 
 
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+   set(TEST_BUILD_TYPE "Debug")
+   set(CMAKE_BUILD_TYPE "Release")
+else()
+   set(TEST_BUILD_TYPE ${CMAKE_BUILD_TYPE})
+endif()
+
+
 message(STATUS "Building pratform contracts ${VERSION_FULL}")
 
 ExternalProject_Add(
@@ -28,3 +36,41 @@ ExternalProject_Add(
     INSTALL_COMMAND ""
     BUILD_ALWAYS 1
 )
+
+
+if (APPLE)
+    set(OPENSSL_ROOT "/usr/local/opt/openssl")
+elseif (UNIX)
+    set(OPENSSL_ROOT "/usr/include/openssl")
+endif()
+
+set(SECP256K1_ROOT "/usr/local")
+
+if (APPLE)
+    set(OPENSSL_ROOT "/usr/local/opt/openssl")
+elseif (UNIX)
+    set(OPENSSL_ROOT "/usr/include/openssl")
+endif()
+set(SECP256K1_ROOT "/usr/local")
+
+string(REPLACE ";" "|" TEST_FRAMEWORK_PATH "${CMAKE_FRAMEWORK_PATH}")
+string(REPLACE ";" "|" TEST_MODULE_PATH "${CMAKE_MODULE_PATH}")
+
+ExternalProject_Add(
+    contracts_unit_tests
+    LIST_SEPARATOR | # Use the alternate list separator
+    CMAKE_ARGS -DCMAKE_BUILD_TYPE=${TEST_BUILD_TYPE} -DCMAKE_FRAMEWORK_PATH=${TEST_FRAMEWORK_PATH} -DCMAKE_MODULE_PATH=${TEST_MODULE_PATH} -DEOSIO_ROOT=${EOSIO_ROOT} -DLLVM_DIR=${LLVM_DIR}
+    SOURCE_DIR ${CMAKE_SOURCE_DIR}/tests
+    BINARY_DIR ${CMAKE_BINARY_DIR}/tests
+    BUILD_ALWAYS 1
+    TEST_COMMAND   ""
+    INSTALL_COMMAND ""
+)
+add_dependencies(contracts_unit_tests contracts_project)
+
+add_custom_target(create_tar COMMAND
+    mkdir -p assets &&
+    tar -C ${CMAKE_BINARY_DIR} -cvz --exclude='include' --exclude='*.cmake' --exclude='Makefile' --exclude='CMake*' -f "assets/contracts-${GIT_TAG}.tar.gz" "contracts" --transform='s/contracts/contracts-${GIT_TAG}/g'
+)
+
+add_dependencies(create_tar contracts_unit_tests)
