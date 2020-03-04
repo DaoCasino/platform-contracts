@@ -31,7 +31,7 @@ ExternalProject_Add(
     BINARY_DIR ${CMAKE_BINARY_DIR}/contracts
     CMAKE_ARGS
         -DCMAKE_TOOLCHAIN_FILE=${EOSIO_CDT_ROOT}/lib/cmake/eosio.cdt/EosioWasmToolchain.cmake
-        -DCONTRACTS_VER_DIRTY=${CONTRACTS_VER_DIRTY}
+        -DCONTRACT_VERSION=${VERSION_FULL}
     UPDATE_COMMAND ""
     PATCH_COMMAND ""
     TEST_COMMAND ""
@@ -81,7 +81,7 @@ add_dependencies(contracts_unit_tests contracts_project)
 
 add_custom_target(create_tar COMMAND
     mkdir -p assets &&
-    tar -C ${CMAKE_BINARY_DIR} -cvz --exclude='include' --exclude='*.cmake' --exclude='Makefile' --exclude='CMake*' -f "assets/contracts-${GIT_TAG}.tar.gz" "contracts" --transform='s/contracts/contracts-${GIT_TAG}/g'
+    tar -C ${CMAKE_BINARY_DIR} -cvz --exclude='include' --exclude='*.cmake' --exclude='Makefile' --exclude='CMake*' -f "assets/contracts-${VERSION_FULL}.tar.gz" "contracts"
 )
 
 add_dependencies(create_tar contracts_unit_tests)
