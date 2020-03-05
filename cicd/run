@@ -8,7 +8,7 @@ cmd="${1:?}"
 shift
 
 case "$cmd" in
-(build) eval "$run_node_with_cdt_cmd" ./cicd/build.sh ;;
+(build) eval "$run_node_with_cdt_cmd" ./cicd/build.sh $@ ;;
 (test)  eval "$run_node_with_cdt_cmd" ./build/tests/unit_test "$@" ;;
 (pack)  eval "$run_node_with_cdt_cmd" ./cicd/pack.sh ;;
 (login) eval "$run_node_with_cdt_cmd" bash ;;

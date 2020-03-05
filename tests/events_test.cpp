@@ -8,10 +8,6 @@ using bytes = std::vector<char>;
 
 class events_tester : public basic_tester {
 public:
-    const static account_name platform_name;
-    const static account_name events_name;
-
-public:
     events_tester() {
         create_accounts({
             platform_name,
@@ -34,9 +30,6 @@ public:
         return data.empty() ? fc::variant() : abi_ser[platform_name].binary_to_variant("game_row", data, abi_serializer_max_time);
     }
 };
-
-const account_name events_tester::platform_name = N(platform);
-const account_name events_tester::events_name = N(events);
 
 
 BOOST_AUTO_TEST_SUITE(events_tests)
