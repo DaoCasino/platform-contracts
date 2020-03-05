@@ -8,6 +8,8 @@ using eosio::testing::read_abi;
 namespace testing {
 
 struct contracts {
+    static std::string version() { return "${CONTRACT_VERSION}"; };
+
     struct platform {
         static std::vector<uint8_t> wasm() { return read_wasm("${CMAKE_BINARY_DIR}/../contracts/platform/platform.wasm"); }
         static std::string          wast() { return read_wast("${CMAKE_BINARY_DIR}/../contracts/platform/platform.wast"); }

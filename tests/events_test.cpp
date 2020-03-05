@@ -71,6 +71,43 @@ BOOST_FIXTURE_TEST_CASE(send_event_ok, events_tester) try {
     );
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(vesion_test, events_tester) try {
+    account_name casino_account = N(casino.1);
+    account_name game_account = N(game.1);
+
+    create_account(casino_account);
+    create_account(game_account);
+
+    base_tester::push_action(platform_name, N(addcas), platform_name, mvo()
+        ("contract", casino_account)
+        ("meta", bytes())
+    );
+
+    base_tester::push_action(platform_name, N(addgame), platform_name, mvo()
+        ("contract", game_account)
+        ("params_cnt", 0)
+        ("meta", bytes())
+    );
+
+    produce_blocks(2);
+
+    base_tester::push_action(events_name, N(send), game_account, mvo()
+        ("sender", game_account)
+        ("casino_id", 0)
+        ("game_id", 0)
+        ("req_id", 0)
+        ("event_type", 0)
+        ("data", bytes())
+    );
+
+    vector<char> data = get_row_by_account(events_name, events_name, N(version), N(version) );
+    BOOST_REQUIRE_EQUAL(data.empty(), false);
+
+    auto version = abi_ser[events_name].binary_to_variant("version_row", data, abi_serializer_max_time);
+    BOOST_REQUIRE_EQUAL(version["version"], contracts::version());
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(send_event_invalid_sender, events_tester) try {
     account_name casino_account = N(casino.1);
     account_name game_account = N(game.1);
