@@ -22,6 +22,7 @@ configure_file(${CMAKE_SOURCE_DIR}/contracts.hpp.in ${CMAKE_BINARY_DIR}/contract
 add_eosio_test(unit_test
     main.cpp
     platform_test.cpp
+    casino_test.cpp
 )
 
 target_include_directories(unit_test PUBLIC "${CMAKE_BINARY_DIR}")
