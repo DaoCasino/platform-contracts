@@ -30,9 +30,6 @@ public:
         vector<char> data = get_row_by_account(platform_name, platform_name, N(game), game_id );
         return data.empty() ? fc::variant() : abi_ser[platform_name].binary_to_variant("game_row", data, abi_serializer_max_time);
     }
-
-public:
-    abi_serializer plarform_abi_ser;
 };
 
 const account_name platform_tester::platform_name = N(platform);
