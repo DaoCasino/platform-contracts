@@ -57,6 +57,24 @@ BOOST_FIXTURE_TEST_CASE(add_casino, platform_tester) try {
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(vesion_test, platform_tester) try {
+    account_name casino_account = N(casino.1);
+
+    create_account(casino_account);
+
+    base_tester::push_action(platform_name, N(addcas), platform_name, mvo()
+        ("contract", casino_account)
+        ("meta", bytes())
+    );
+
+    vector<char> data = get_row_by_account(platform_name, platform_name, N(version), N(version) );
+    BOOST_REQUIRE_EQUAL(data.empty(), false);
+
+    auto version = abi_ser[platform_name].binary_to_variant("version_row", data, abi_serializer_max_time);
+    BOOST_REQUIRE_EQUAL(version["version"], contracts::version());
+
+} FC_LOG_AND_RETHROW()
+
 BOOST_FIXTURE_TEST_CASE(add_many_casinos, platform_tester) try {
     std::vector<account_name> casinos = {
         N(casino.1),
