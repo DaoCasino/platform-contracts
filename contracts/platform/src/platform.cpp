@@ -5,12 +5,16 @@ namespace platform {
 void platform::add_casino(name contract, bytes meta) {
     require_auth(get_self());
 
+    auto gs = global.get_or_default();
+
     casinos.emplace(get_self(), [&](auto& row) {
-        row.id = casinos.available_primary_key(); // <-- auto-increment id
+        row.id = gs.casinos_seq++; // <-- auto-increment id
         row.paused = false; // enabled by default
         row.contract = contract;
         row.meta = std::move(meta);
     });
+
+    global.set(gs, get_self());
 }
 
 void platform::del_casino(uint64_t id) {
@@ -51,13 +55,17 @@ void platform::set_meta_casino(uint64_t id, bytes meta) {
 void platform::add_game(name contract, uint16_t params_cnt, bytes meta) {
     require_auth(get_self());
 
+    auto gs = global.get_or_default();
+
     games.emplace(get_self(), [&](auto& row) {
-        row.id = games.available_primary_key(); // <-- auto-increment id
+        row.id = gs.games_seq++; // <-- auto-increment id
         row.paused = false; // <-- enabled by default
         row.params_cnt = params_cnt;
         row.contract = contract;
         row.meta = std::move(meta);
     });
+
+    global.set(gs, get_self());
 }
 
 void platform::del_game(uint64_t id) {

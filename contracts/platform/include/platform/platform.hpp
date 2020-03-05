@@ -17,6 +17,12 @@ struct [[eosio::table("version"), eosio::contract("platform")]] version_row {
 };
 using version_singleton = eosio::singleton<"version"_n, version_row>;
 
+struct [[eosio::table("version"), eosio::contract("platform")]] global_row {
+    uint64_t casinos_seq { 0u }; // <-- used for casino id auto increment
+    uint64_t games_seq { 0u }; // <-- used for game id auto increment
+};
+using global_singleton = eosio::singleton<"global"_n, global_row>;
+
 struct [[eosio::table("casino"), eosio::contract("platform")]] casino_row {
     uint64_t id;
     name contract;
@@ -46,6 +52,7 @@ public:
     platform(name receiver, name code, eosio::datastream<const char*> ds):
         contract(receiver, code, ds),
         version(_self, _self.value),
+        global(_self, _self.value),
         casinos(_self, _self.value),
         games(_self, _self.value)
     {
@@ -85,6 +92,7 @@ public:
 
 private:
     version_singleton version;
+    global_singleton global;
     casino_table casinos;
     game_table games;
 };
