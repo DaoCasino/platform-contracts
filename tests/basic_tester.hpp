@@ -85,6 +85,17 @@ public:
                                 ("memo",     "") );
     }
 
+    action_result push_action( const action_name& contract, const action_name &name, const action_name &actor, const variant_object& data) {
+        string action_type_name = abi_ser[contract].get_action_type(name);
+
+        action act;
+        act.account = contract;
+        act.name = name;
+        act.data = abi_ser[contract].variant_to_binary( action_type_name, data, abi_serializer_max_time );
+
+        return base_tester::push_action( std::move(act), actor);
+   }
+
 public:
     std::map<account_name, abi_serializer> abi_ser;
 };
