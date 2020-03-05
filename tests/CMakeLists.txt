@@ -2,8 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 
 find_package(eosio)
 
-message(STATUS "Downloading daobet.contracts")
-set(DAOBET_CONTRACTS_VERSION "v1.0.7")
+message(STATUS "Downloading daobet.contracts version: ${DAOBET_CONTRACTS_VERSION}")
 set(DAOBET_CONTRACTS_URL "https://github.com/DaoCasino/DAOBET.contracts/releases/download/${DAOBET_CONTRACTS_VERSION}/contracts-${DAOBET_CONTRACTS_VERSION}.tar.gz")
 set(DAOBET_CONTRACTS_TAR_NAME "daobet.contracts-${DAOBET_CONTRACTS_VERSION}.tar.gz")
 set(DAOBET_CONTRACTS_TAR_PATH "${CMAKE_BINARY_DIR}/${DAOBET_CONTRACTS_TAR_NAME}")

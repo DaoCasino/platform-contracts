@@ -7,6 +7,8 @@ find_package(eosio.cdt)
 
 set(EOSIO_CDT_VERSION_MIN "1.6.3")
 set(EOSIO_CDT_VERSION_SOFT_MAX "1.6.3")
+set(DAOBET_CONTRACTS_VERSION "v1.0.7") # daobet system contracts version from git tag
+
 
 execute_process(COMMAND git describe --tags --always --dirty
     OUTPUT_VARIABLE GIT_TAG_RAW
@@ -71,6 +73,7 @@ ExternalProject_Add(
         -DEOSIO_ROOT=${EOSIO_ROOT}
         -DLLVM_DIR=${LLVM_DIR}
         -Deosio_DIR=${CMAKE_MODULE_PATH}
+        -DDAOBET_CONTRACTS_VERSION=${DAOBET_CONTRACTS_VERSION}
     SOURCE_DIR ${CMAKE_SOURCE_DIR}/tests
     BINARY_DIR ${CMAKE_BINARY_DIR}/tests
     BUILD_ALWAYS 1
