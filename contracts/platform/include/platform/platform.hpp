@@ -101,6 +101,16 @@ private:
 // external non-writing functions
 namespace read {
 
+static casino_row get_casino(name platform_contract, uint64_t casino_id) {
+    casino_table casinos(platform_contract, platform_contract.value);
+    return casinos.get(casino_id, "casino not found");
+}
+
+static game_row get_game(name platform_contract, uint64_t game_id) {
+    game_table games(platform_contract, platform_contract.value);
+    return games.get(game_id, "game not found");
+}
+
 static bool is_active_casino(name platform_contract, uint64_t casino_id) {
     casino_table casinos(platform_contract, platform_contract.value);
     const auto casino_itr = casinos.find(casino_id);

@@ -14,6 +14,12 @@ struct contracts {
         static std::vector<char>    abi() { return read_abi("${CMAKE_BINARY_DIR}/../contracts/platform/platform.abi"); }
     };
 
+    struct events {
+        static std::vector<uint8_t> wasm() { return read_wasm("${CMAKE_BINARY_DIR}/../contracts/events/events.wasm"); }
+        static std::string          wast() { return read_wast("${CMAKE_BINARY_DIR}/../contracts/events/events.wast"); }
+        static std::vector<char>    abi() { return read_abi("${CMAKE_BINARY_DIR}/../contracts/events/events.abi"); }
+    };
+
     struct system {
         struct token {
             static std::vector<uint8_t> wasm() { return read_wasm("${CMAKE_BINARY_DIR}/daobet.contracts/eosio.token/eosio.token.wasm"); }
