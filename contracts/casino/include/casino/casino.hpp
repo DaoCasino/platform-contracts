@@ -29,23 +29,23 @@ class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
 
-    static constexpr name platform_account{"eosio.saving"_n};
+    static constexpr name platform_account{"dao.platform"_n};
 
     casino(name receiver, name code, eosio::datastream<const char*> ds):
         contract(receiver, code, ds),
         version(_self, _self.value),
-        games(_self, _self.value),
-        verified_games(platform_account, platform_account.value)
+        games(_self, _self.value)
     {
         version.set(version_row {::platform::CONTRACT_VERSION}, _self);
     }
 
+    [[eosio::action("addgame")]]
     void add_game(uint64_t game_id, game_params_type params);
+    [[eosio::action("rmgame")]]
     void remove_game(uint64_t game_id);
 private:
     version_singleton version;
     game_table games;
-    platform::game_table verified_games;
 };
 
 } // namespace casino
