@@ -21,7 +21,6 @@ using version_singleton = eosio::singleton<"version"_n, version_row>;
 class [[eosio::contract("events")]] events: public eosio::contract {
 public:
     using eosio::contract::contract;
-    static constexpr name platform_contract { "platform"_n };
 
     events(name receiver, name code, eosio::datastream<const char*> ds):
         contract(receiver, code, ds),

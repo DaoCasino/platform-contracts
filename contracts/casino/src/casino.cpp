@@ -5,7 +5,7 @@ using eosio::check;
 namespace casino {
 
 void casino::add_game(uint64_t game_id, game_params_type params) {
-    check(platform::read::is_active_game(platform_account, game_id), "the game was not verified by the platform");
+    check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
     games.emplace(get_self(), [&](auto& row) {
         row.game_id = game_id;
         row.params = params;
