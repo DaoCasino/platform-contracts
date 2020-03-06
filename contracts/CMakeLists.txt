@@ -7,3 +7,4 @@ find_package(eosio.cdt)
 
 add_subdirectory(platform)
 add_subdirectory(casino)
+add_subdirectory(events)

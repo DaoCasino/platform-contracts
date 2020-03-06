@@ -1,0 +1,7 @@
+#pragma once
+
+#include <string>
+
+namespace events {
+    static const std::string CONTRACT_VERSION = "${CONTRACT_VERSION}";
+} // namespace events

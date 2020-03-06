@@ -23,6 +23,7 @@ add_eosio_test(unit_test
     main.cpp
     platform_test.cpp
     casino_test.cpp
+    events_test.cpp
 )
 
 target_include_directories(unit_test PUBLIC "${CMAKE_BINARY_DIR}")
