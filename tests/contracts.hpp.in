@@ -24,7 +24,7 @@ struct contracts {
         static std::string          wast() { return read_wast("${CMAKE_BINARY_DIR}/../contracts/events/events.wast"); }
         static std::vector<char>    abi() { return read_abi("${CMAKE_BINARY_DIR}/../contracts/events/events.abi"); }
     };
-    
+
     struct casino {
         static std::vector<uint8_t> wasm() { return read_wasm("${CMAKE_BINARY_DIR}/../contracts/casino/casino.wasm"); }
         static std::string          wast() { return read_wast("${CMAKE_BINARY_DIR}/../contracts/casino/casino.wast"); }
