@@ -1,5 +1,5 @@
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../platform/include/platform/version.hpp.in
-               ${CMAKE_CURRENT_BINARY_DIR}/../platform/include/platform/version.hpp
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../casino/include/casino/version.hpp.in
+               ${CMAKE_CURRENT_BINARY_DIR}/../casino/include/casino/version.hpp
 )
 
 add_contract(casino casino ${CMAKE_CURRENT_SOURCE_DIR}/src/casino.cpp)

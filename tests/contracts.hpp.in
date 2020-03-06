@@ -7,6 +7,9 @@ using eosio::testing::read_abi;
 
 namespace testing {
 
+static const eosio::chain::name platform_name = N(${PLATFORM_CONTRACT});
+static const eosio::chain::name events_name = N(${EVENTS_CONTRACT});
+
 struct contracts {
     static std::string version() { return "${CONTRACT_VERSION}"; };
 
@@ -21,7 +24,7 @@ struct contracts {
         static std::string          wast() { return read_wast("${CMAKE_BINARY_DIR}/../contracts/events/events.wast"); }
         static std::vector<char>    abi() { return read_abi("${CMAKE_BINARY_DIR}/../contracts/events/events.abi"); }
     };
-    
+
     struct casino {
         static std::vector<uint8_t> wasm() { return read_wasm("${CMAKE_BINARY_DIR}/../contracts/casino/casino.wasm"); }
         static std::string          wast() { return read_wast("${CMAKE_BINARY_DIR}/../contracts/casino/casino.wast"); }

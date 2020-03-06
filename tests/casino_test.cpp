@@ -7,18 +7,17 @@ using bytes = std::vector<char>;
 
 class casino_tester : public basic_tester {
 public:
-    static const account_name platform_account;
     static const account_name casino_account;
 
     casino_tester() {
         create_accounts({
-            platform_account,
+            platform_name,
             casino_account
         });
 
         produce_blocks(2);
 
-        deploy_contract<contracts::platform>(platform_account);
+        deploy_contract<contracts::platform>(platform_name);
         deploy_contract<contracts::casino>(casino_account);
     }
 
@@ -28,7 +27,6 @@ public:
     }
 };
 
-const account_name casino_tester::platform_account = N(dao.platform);
 const account_name casino_tester::casino_account = N(dao.casino);
 
 using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
@@ -38,7 +36,7 @@ BOOST_AUTO_TEST_SUITE(casino_tests)
 BOOST_FIXTURE_TEST_CASE(add_game, casino_tester) try {
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(platform_account, N(addgame), platform_account, mvo()
+        push_action(platform_name, N(addgame), platform_name, mvo()
             ("contract", casino_account)
             ("params_cnt", 1)
             ("meta", bytes())
@@ -69,7 +67,7 @@ BOOST_FIXTURE_TEST_CASE(add_game_verify_failure, casino_tester) try {
 BOOST_FIXTURE_TEST_CASE(revmove_game, casino_tester) try {
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(platform_account, N(addgame), platform_account, mvo()
+        push_action(platform_name, N(addgame), platform_name, mvo()
             ("contract", casino_account)
             ("params_cnt", 1)
             ("meta", bytes())
