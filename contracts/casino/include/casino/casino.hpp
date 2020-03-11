@@ -109,6 +109,11 @@ private:
         const auto itr = balances.find(game_id);
         return itr != balances.end() ? itr->quantity : asset();
     }
+
+    bool is_active_game(uint64_t game_id) const {
+        game_table games(_self, _self.value);
+        return games.find(game_id) != games.end();
+    }
 };
 
 } // namespace casino

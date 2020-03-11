@@ -131,7 +131,7 @@ static game_row get_game(name platform_contract, uint64_t game_id) {
 static game_row get_game(name platform_contract, name game_address) {
     game_table games(platform_contract, platform_contract.value);
     auto games_idx = games.get_index<"address"_n>();
-    return games_idx.get(game_address.value, "game not found");
+    return games_idx.get(game_address.value, "no game found for a given account");
 }
 
 static bool is_active_casino(name platform_contract, uint64_t casino_id) {
