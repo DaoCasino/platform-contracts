@@ -25,6 +25,16 @@ public:
         vector<char> data = get_row_by_account(casino_account, casino_account, N(game), game_id );
         return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("game_row", data, abi_serializer_max_time);
     }
+
+    asset get_game_balance(uint64_t game_id, symbol balance_symbol = symbol{CORE_SYM}) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(balance), game_id );
+        return data.empty() ? asset(0, balance_symbol) : abi_ser[casino_account].binary_to_variant("balance_row", data, abi_serializer_max_time)["quantity"].as<asset>();
+    }
+
+    asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
+      vector<char> data = get_row_by_account( N(eosio.token), act, N(accounts), account_name(balance_symbol.to_symbol_code().value) );
+      return data.empty() ? asset(0, balance_symbol) : abi_ser[N(eosio.token)].binary_to_variant("account", data, abi_serializer_max_time)["balance"].as<asset>();
+   }
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
@@ -148,6 +158,85 @@ BOOST_FIXTURE_TEST_CASE(remove_game_auth_failure, casino_tester) try {
             ("game_id", 0)
         )
     );
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(simple_transfer_to_casino, casino_tester) try {
+    name game_account = N(game.boy);
+    create_accounts({
+        game_account
+    });
+    transfer(config::system_account_name, game_account, STRSYM("3.0000"));
+    transfer(game_account, casino_account, STRSYM("3.0000"), game_account);
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("3.0000"));
+    BOOST_REQUIRE_EQUAL(get_game_balance(game_account), STRSYM("0.0000"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(on_transfer_update_game_balance, casino_tester) try {
+    name game_account = N(game.boy);
+    create_accounts({
+        game_account
+    });
+    transfer(config::system_account_name, game_account, STRSYM("3.0000"));
+    transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    transfer(game_account, casino_account, STRSYM("3.0000"), game_account);
+    BOOST_REQUIRE_EQUAL(get_game_balance(0), STRSYM("3.0000"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("303.0000"));
+    BOOST_REQUIRE_EQUAL(get_balance(game_account), STRSYM("0.0000"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(on_loss_update_game_balance, casino_tester) try {
+    name game_account = N(game.boy);
+    name player_account = N(din.don);
+
+    create_accounts({
+        game_account,
+        player_account
+    });
+    transfer(config::system_account_name, casino_account, STRSYM("3.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(onloss), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", STRSYM("3.0000"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_balance(player_account), STRSYM("3.0000"));
+    BOOST_REQUIRE_EQUAL(get_game_balance(0), STRSYM("-3.0000"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("0.0000"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

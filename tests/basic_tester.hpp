@@ -41,8 +41,7 @@ public:
         });
 
         produce_blocks( 100 );
-        set_code( N(eosio.token), contracts::system::token::wasm());
-        set_abi( N(eosio.token), contracts::system::token::abi().data() );
+        deploy_contract<contracts::system::token>(N(eosio.token));
 
         symbol core_symbol = symbol{CORE_SYM};
         create_currency( N(eosio.token), config::system_account_name, asset(100000000000000, core_symbol) );

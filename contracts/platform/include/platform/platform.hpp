@@ -30,8 +30,14 @@ struct [[eosio::table("casino"), eosio::contract("platform")]] casino_row {
     bytes meta;
 
     uint64_t primary_key() const { return id; }
+    uint64_t by_address() const { return contract.value; }
 };
-using casino_table = eosio::multi_index<"casino"_n, casino_row>;
+
+using casino_table = eosio::multi_index<
+                        "casino"_n,
+                        casino_row,
+                        eosio::indexed_by<"address"_n, eosio::const_mem_fun<casino_row, uint64_t, &casino_row::by_address>>
+                    >;
 
 struct [[eosio::table("game"), eosio::contract("platform")]] game_row {
     uint64_t id;
@@ -41,8 +47,13 @@ struct [[eosio::table("game"), eosio::contract("platform")]] game_row {
     bytes meta;
 
     uint64_t primary_key() const { return id; }
+    uint64_t by_address() const { return contract.value; }
 };
-using game_table = eosio::multi_index<"game"_n, game_row>;
+using game_table = eosio::multi_index<
+                    "game"_n,
+                    game_row,
+                    eosio::indexed_by<"address"_n, eosio::const_mem_fun<game_row, uint64_t, &game_row::by_address>>
+                   >;
 
 
 class [[eosio::contract("platform")]] platform: public eosio::contract {
@@ -106,9 +117,21 @@ static casino_row get_casino(name platform_contract, uint64_t casino_id) {
     return casinos.get(casino_id, "casino not found");
 }
 
+static casino_row get_casino(name platform_contract, name casino_address) {
+    casino_table casinos(platform_contract, platform_contract.value);
+    auto casino_idx = casinos.get_index<"address"_n>();
+    return casino_idx.get(casino_address.value, "casino not found");
+}
+
 static game_row get_game(name platform_contract, uint64_t game_id) {
     game_table games(platform_contract, platform_contract.value);
     return games.get(game_id, "game not found");
+}
+
+static game_row get_game(name platform_contract, name game_address) {
+    game_table games(platform_contract, platform_contract.value);
+    auto games_idx = games.get_index<"address"_n>();
+    return games_idx.get(game_address.value, "game not found");
 }
 
 static bool is_active_casino(name platform_contract, uint64_t casino_id) {
