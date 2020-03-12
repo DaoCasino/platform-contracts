@@ -4,6 +4,8 @@ namespace testing {
 
 using bytes = std::vector<char>;
 
+static constexpr int64_t seconds_per_day = 24 * 3600;
+static constexpr int64_t seconds_per_month = 30 * seconds_per_day;
 
 class casino_tester : public basic_tester {
 public:
@@ -27,8 +29,8 @@ public:
     }
 
     asset get_game_balance(uint64_t game_id, symbol balance_symbol = symbol{CORE_SYM}) {
-        vector<char> data = get_row_by_account(casino_account, casino_account, N(balance), game_id );
-        return data.empty() ? asset(0, balance_symbol) : abi_ser[casino_account].binary_to_variant("balance_row", data, abi_serializer_max_time)["quantity"].as<asset>();
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(gamestate), game_id );
+        return data.empty() ? asset(0, balance_symbol) : abi_ser[casino_account].binary_to_variant("game_state_row", data, abi_serializer_max_time)["quantity"].as<asset>();
     }
 
     asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
@@ -375,6 +377,71 @@ BOOST_FIXTURE_TEST_CASE(on_loss_from_inactive_platform_game, casino_tester) try 
             ("game_account", game_account)
             ("player_account", player_account)
             ("quantity", STRSYM("3.0000"))
+        )
+    );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(claim_profit, casino_tester) try {
+    name game_account = N(game.boy);
+    name game_beneficiary_account = N(din.don);
+
+    create_accounts({
+        game_account,
+        game_beneficiary_account
+    });
+    transfer(config::system_account_name, game_account, STRSYM("3.0000"));
+    transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(setmargin), platform_name, mvo()
+            ("id", 0)
+            ("profit_margin", 50)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(setbenefic), platform_name, mvo()
+            ("id", 0)
+            ("beneficiary", game_beneficiary_account)
+        )
+    );
+
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    transfer(game_account, casino_account, STRSYM("3.0000"), game_account);
+
+    produce_block(fc::seconds(seconds_per_month + 1));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(claimprofit), game_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_game_balance(0), STRSYM("1.5000"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("301.5000"));
+    BOOST_REQUIRE_EQUAL(get_balance(game_beneficiary_account), STRSYM("1.5000"));
+    BOOST_REQUIRE_EQUAL(get_balance(game_account), STRSYM("0.0000"));
+
+    produce_block(fc::seconds(3));
+    // second claim should fail
+    BOOST_REQUIRE_EQUAL(
+        wasm_assert_msg("already claimed within past month"),
+        push_action(casino_account, N(claimprofit), game_account, mvo()
+            ("game_account", game_account)
         )
     );
 } FC_LOG_AND_RETHROW()

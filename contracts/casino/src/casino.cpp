@@ -36,9 +36,8 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
 
     if (games_idx.find(game_account.value) != games_idx.end()) {
         // get game throws if there's no game in the table
-        auto game_id = platform::read::get_game(platform_contract, game_account).id;
-        check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
-        check(is_active_game(game_id), "the game is not run by the casino");
+        auto game_id = get_game_id(game_account);
+        verify_game(game_id);
         add_balance(game_id, quantity);
     }
 }
@@ -46,18 +45,27 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
 void casino::on_loss(name game_account, name player_account, eosio::asset quantity) {
     require_auth(game_account);
     check(is_account(player_account), "to account does not exist");
-    auto game_id = platform::read::get_game(platform_contract, game_account).id;
-    check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
-    check(is_active_game(game_id), "the game is not run by the casino");
-
-    eosio::action(
-        eosio::permission_level{_self, "active"_n},
-        "eosio.token"_n,
-        "transfer"_n,
-        std::make_tuple(_self, player_account, quantity, std::string("player winnings"))
-    ).send();
-
+    auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+    transfer(player_account, quantity);
     sub_balance(game_id, quantity);
+}
+
+void casino::claim_profit(name game_account) {
+    const auto ct = eosio::current_time_point();
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+    check(ct - get_last_claim_time(game_id) > microseconds(useconds_per_month), "already claimed within past month");
+
+    const auto game_row = platform::read::get_game(platform_contract, game_id);
+    const auto balance = get_balance(game_id);
+    const auto profit_margin = game_row.profit_margin;
+    const auto beneficiary = game_row.beneficiary;
+    const auto to_transfer = balance * profit_margin / 100;
+    transfer(beneficiary, to_transfer);
+
+    sub_balance(game_id, to_transfer);
+    update_last_claim_time(game_id);
 }
 
 } // namespace casino
