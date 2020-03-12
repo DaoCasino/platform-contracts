@@ -41,8 +41,7 @@ public:
         });
 
         produce_blocks( 100 );
-        set_code( N(eosio.token), contracts::system::token::wasm());
-        set_abi( N(eosio.token), contracts::system::token::abi().data() );
+        deploy_contract<contracts::system::token>(N(eosio.token));
 
         symbol core_symbol = symbol{CORE_SYM};
         create_currency( N(eosio.token), config::system_account_name, asset(100000000000000, core_symbol) );
@@ -62,23 +61,23 @@ public:
         abi_ser.insert({ account, abi_s });
     }
 
-    void create_currency( const name& contract, const name& manager, const asset& maxsupply ) {
+    action_result create_currency( const name& contract, const name& manager, const asset& maxsupply ) {
         auto act = mutable_variant_object()
             ("issuer",         manager)
             ("maximum_supply", maxsupply);
 
-        base_tester::push_action(contract, N(create), contract, act);
+        return push_action(contract, N(create), contract, act);
     }
 
-    void issue( const name& to, const asset& amount, const name& manager = config::system_account_name ) {
-        base_tester::push_action( N(eosio.token), N(issue), manager, mutable_variant_object()
+    action_result issue( const name& to, const asset& amount, const name& manager = config::system_account_name ) {
+        return push_action( N(eosio.token), N(issue), manager, mutable_variant_object()
                                 ("to",       to)
                                 ("quantity", amount)
                                 ("memo",     "") );
     }
 
-    void transfer( const name& from, const name& to, const asset& amount, const name& manager = config::system_account_name ) {
-        base_tester::push_action( N(eosio.token), N(transfer), manager, mutable_variant_object()
+    action_result transfer( const name& from, const name& to, const asset& amount, const name& manager = config::system_account_name ) {
+        return push_action( N(eosio.token), N(transfer), manager, mutable_variant_object()
                                 ("from",     from)
                                 ("to",       to)
                                 ("quantity", amount)

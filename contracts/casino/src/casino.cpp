@@ -22,9 +22,42 @@ void casino::remove_game(uint64_t game_id) {
 
 void casino::set_owner(name new_owner) {
     const auto old_owner = get_owner();
-    eosio::require_auth(old_owner);
+    require_auth(old_owner);
     check(is_account(new_owner), "new owner account does not exist");
     owner_account.set(owner_row{new_owner}, old_owner);
+}
+
+void casino::on_transfer(name game_account, name casino_account, eosio::asset quantity, std::string memo) {
+    if (game_account == get_self() || casino_account != get_self()) {
+        return;
+    }
+    platform::game_table platform_games(platform_contract, platform_contract.value);
+    auto games_idx = platform_games.get_index<"address"_n>();
+
+    if (games_idx.find(game_account.value) != games_idx.end()) {
+        // get game throws if there's no game in the table
+        auto game_id = platform::read::get_game(platform_contract, game_account).id;
+        check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
+        check(is_active_game(game_id), "the game is not run by the casino");
+        add_balance(game_id, quantity);
+    }
+}
+
+void casino::on_loss(name game_account, name player_account, eosio::asset quantity) {
+    require_auth(game_account);
+    check(is_account(player_account), "to account does not exist");
+    auto game_id = platform::read::get_game(platform_contract, game_account).id;
+    check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
+    check(is_active_game(game_id), "the game is not run by the casino");
+
+    eosio::action(
+        eosio::permission_level{_self, "active"_n},
+        "eosio.token"_n,
+        "transfer"_n,
+        std::make_tuple(_self, player_account, quantity, std::string("player winnings"))
+    ).send();
+
+    sub_balance(game_id, quantity);
 }
 
 } // namespace casino
