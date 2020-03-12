@@ -37,6 +37,7 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
     if (games_idx.find(game_account.value) != games_idx.end()) {
         // get game throws if there's no game in the table
         auto game_id = platform::read::get_game(platform_contract, game_account).id;
+        check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
         check(is_active_game(game_id), "the game is not run by the casino");
         add_balance(game_id, quantity);
     }
@@ -46,6 +47,7 @@ void casino::on_loss(name game_account, name player_account, eosio::asset quanti
     require_auth(game_account);
     check(is_account(player_account), "to account does not exist");
     auto game_id = platform::read::get_game(platform_contract, game_account).id;
+    check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
     check(is_active_game(game_id), "the game is not run by the casino");
 
     eosio::action(
