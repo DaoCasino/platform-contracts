@@ -102,4 +102,22 @@ void platform::set_meta_game(uint64_t id, bytes meta) {
     });
 }
 
+void platform::set_profit_margin_game(uint64_t id, uint32_t profit_margin) {
+    require_auth(get_self());
+
+    const auto game_itr = games.require_find(id, "game not found");
+    games.modify(game_itr, get_self(), [&](auto& row) {
+        row.profit_margin = profit_margin;
+    });
+}
+
+void platform::set_beneficiary_game(uint64_t id, name beneficiary) {
+    require_auth(get_self());
+
+    const auto game_itr = games.require_find(id, "game not found");
+    games.modify(game_itr, get_self(), [&](auto& row) {
+        row.beneficiary = beneficiary;
+    });
+}
+
 } // namespace platform

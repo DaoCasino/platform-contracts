@@ -44,6 +44,8 @@ struct [[eosio::table("game"), eosio::contract("platform")]] game_row {
     name contract;
     uint16_t params_cnt;
     bool paused;
+    uint32_t profit_margin;
+    name beneficiary;
     bytes meta;
 
     uint64_t primary_key() const { return id; }
@@ -100,6 +102,12 @@ public:
 
     [[eosio::action("setmetagame")]]
     void set_meta_game(uint64_t id, bytes meta);
+
+    [[eosio::action("setmargin")]]
+    void set_profit_margin_game(uint64_t id, uint32_t profit_margin);
+
+    [[eosio::action("setbenefic")]]
+    void set_beneficiary_game(uint64_t id, name beneficiary);
 
 private:
     version_singleton version;
