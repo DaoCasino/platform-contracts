@@ -2,7 +2,6 @@
 
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
-#include <casino/version.hpp>
 #include <platform/platform.hpp>
 
 namespace casino {
@@ -34,15 +33,7 @@ class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
 
-    casino(name receiver, name code, eosio::datastream<const char*> ds):
-        contract(receiver, code, ds),
-        version(_self, _self.value),
-        games(_self, _self.value),
-        owner_account(_self, _self.value)
-    {
-        owner_account.set(owner_row{_self}, _self);
-        version.set(version_row {CONTRACT_VERSION}, _self);
-    }
+    casino(name receiver, name code, eosio::datastream<const char*> ds);
 
     [[eosio::action("addgame")]]
     void add_game(uint64_t game_id, game_params_type params);

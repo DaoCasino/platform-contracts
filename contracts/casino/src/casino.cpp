@@ -1,8 +1,19 @@
 #include <casino/casino.hpp>
+#include <casino/version.hpp>
 
 using eosio::check;
 
 namespace casino {
+
+casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
+    contract(receiver, code, ds),
+    version(_self, _self.value),
+    games(_self, _self.value),
+    owner_account(_self, _self.value)
+{
+    owner_account.set(owner_row{_self}, _self);
+    version.set(version_row {CONTRACT_VERSION}, _self);
+}
 
 void casino::add_game(uint64_t game_id, game_params_type params) {
     require_auth(get_owner());
