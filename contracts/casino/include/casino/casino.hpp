@@ -3,7 +3,6 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 #include <eosio/asset.hpp>
-#include <casino/version.hpp>
 #include <platform/platform.hpp>
 
 namespace casino {
@@ -50,16 +49,7 @@ class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
 
-    casino(name receiver, name code, eosio::datastream<const char*> ds):
-        contract(receiver, code, ds),
-        version(_self, _self.value),
-        games(_self, _self.value),
-        owner_account(_self, _self.value),
-        game_state(_self, _self.value)
-    {
-        owner_account.set(owner_row{_self}, _self);
-        version.set(version_row {CONTRACT_VERSION}, _self);
-    }
+    casino(name receiver, name code, eosio::datastream<const char*> ds);
 
     [[eosio::action("addgame")]]
     void add_game(uint64_t game_id, game_params_type params);
@@ -130,11 +120,6 @@ private:
         return games.find(game_id) != games.end();
     }
 
-    uint64_t get_game_id(name game_account) {
-        // get game throws if there's no game in the table
-        return platform::read::get_game(platform_contract, game_account).id;
-    }
-
     time_point get_last_claim_time(uint64_t game_id) const {
         game_state_table game_state(_self, _self.value);
         const auto itr = game_state.find(game_id);
@@ -158,10 +143,8 @@ private:
         ).send();
     }
 
-    void verify_game(uint64_t game_id) {
-        check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
-        check(is_active_game(game_id), "the game is not run by the casino");
-    }
+    void verify_game(uint64_t game_id);
+    uint64_t get_game_id(name game_account);
 };
 
 } // namespace casino

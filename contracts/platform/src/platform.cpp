@@ -1,6 +1,25 @@
 #include <platform/platform.hpp>
+#include <platform/version.hpp>
 
 namespace platform {
+
+platform::platform(name receiver, name code, eosio::datastream<const char*> ds):
+    contract(receiver, code, ds),
+    version(_self, _self.value),
+    global(_self, _self.value),
+    casinos(_self, _self.value),
+    games(_self, _self.value)
+{
+    version.set(version_row {CONTRACT_VERSION}, _self);
+}
+
+void platform::set_rsa_pubkey(const std::string& rsa_pubkey) {
+    require_auth(get_self());
+
+    auto gs = global.get_or_default();
+    gs.rsa_pubkey = rsa_pubkey;
+    global.set(gs, get_self());
+}
 
 void platform::add_casino(name contract, bytes meta) {
     require_auth(get_self());

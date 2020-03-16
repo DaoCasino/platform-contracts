@@ -1,8 +1,20 @@
 #include <casino/casino.hpp>
+#include <casino/version.hpp>
 
 using eosio::check;
 
 namespace casino {
+
+casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
+    contract(receiver, code, ds),
+    version(_self, _self.value),
+    games(_self, _self.value),
+    owner_account(_self, _self.value),
+    game_state(_self, _self.value)
+{
+    owner_account.set(owner_row{_self}, _self);
+    version.set(version_row {CONTRACT_VERSION}, _self);
+}
 
 void casino::add_game(uint64_t game_id, game_params_type params) {
     require_auth(get_owner());
@@ -66,6 +78,18 @@ void casino::claim_profit(name game_account) {
 
     sub_balance(game_id, to_transfer);
     update_last_claim_time(game_id);
+}
+
+
+uint64_t casino::get_game_id(name game_account) {
+    // get game throws if there's no game in the table
+    return platform::read::get_game(platform_contract, game_account).id;
+}
+
+
+void casino::verify_game(uint64_t game_id) {
+    check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
+    check(is_active_game(game_id), "the game is not run by the casino");
 }
 
 } // namespace casino

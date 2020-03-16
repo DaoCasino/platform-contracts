@@ -3,7 +3,6 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 
-#include <platform/version.hpp>
 
 namespace platform {
 
@@ -20,6 +19,7 @@ using version_singleton = eosio::singleton<"version"_n, version_row>;
 struct [[eosio::table("version"), eosio::contract("platform")]] global_row {
     uint64_t casinos_seq { 0u }; // <-- used for casino id auto increment
     uint64_t games_seq { 0u }; // <-- used for game id auto increment
+    std::string rsa_pubkey;
 };
 using global_singleton = eosio::singleton<"global"_n, global_row>;
 
@@ -27,6 +27,7 @@ struct [[eosio::table("casino"), eosio::contract("platform")]] casino_row {
     uint64_t id;
     name contract;
     bool paused;
+    std::string rsa_pubkey;
     bytes meta;
 
     uint64_t primary_key() const { return id; }
@@ -62,15 +63,10 @@ class [[eosio::contract("platform")]] platform: public eosio::contract {
 public:
     using eosio::contract::contract;
 
-    platform(name receiver, name code, eosio::datastream<const char*> ds):
-        contract(receiver, code, ds),
-        version(_self, _self.value),
-        global(_self, _self.value),
-        casinos(_self, _self.value),
-        games(_self, _self.value)
-    {
-        version.set(version_row {CONTRACT_VERSION}, _self);
-    }
+    platform(name receiver, name code, eosio::datastream<const char*> ds);
+
+    [[eosio::action("setrsakey")]]
+    void set_rsa_pubkey(const std::string& rsa_pubkey);
 
     [[eosio::action("addcas")]]
     void add_casino(name contract, bytes meta);
@@ -119,6 +115,12 @@ private:
 
 // external non-writing functions
 namespace read {
+
+static std::string get_rsa_pubkey(name platform_contract) {
+    global_singleton global(platform_contract, platform_contract.value);
+    auto gl = global.get_or_default();
+    return gl.rsa_pubkey;
+}
 
 static casino_row get_casino(name platform_contract, uint64_t casino_id) {
     casino_table casinos(platform_contract, platform_contract.value);
