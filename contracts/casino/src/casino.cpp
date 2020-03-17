@@ -96,28 +96,39 @@ void casino::verify_game(uint64_t game_id) {
     check(is_active_game(game_id), "the game is not run by the casino");
 }
 
+void casino::verify_account(name game_account) {
+    verify_game(get_game_id(game_account));
+}
+
 void casino::withdraw(name beneficiary_account, asset quantity) {
     require_auth(get_owner());
     const auto ct = current_time_point();
     const auto account_balance = token::get_balance(_self, core_symbol);
-    const auto max_transfer = account_balance / 10;
-    check(gstate.game_active_sessions_sum + gstate.game_profits_sum <= account_balance, "cannot withdraw: not enough account balance");
-    check(quantity <= max_transfer, "cannot withdraw more than 10% of account balance");
-    transfer(beneficiary_account, quantity);
+
+    if (account_balance > gstate.game_active_sessions_sum + gstate.game_profits_sum) {
+        const asset max_transfer = account_balance - gstate.game_active_sessions_sum - gstate.game_profits_sum;
+        check(quantity <= max_transfer, "quantity exceededs max transfer amount");
+        transfer(beneficiary_account, quantity);
+    } else {
+        check(account_balance > gstate.game_profits_sum, "developer profits exceed account balance");
+        const asset max_transfer = account_balance / 10;
+        check(quantity <= max_transfer, "quantity exceededs max transfer amount");
+        check(ct - gstate.last_withdraw_time > microseconds(useconds_per_week), "already claimed within past week");
+        transfer(beneficiary_account, quantity);
+        gstate.last_withdraw_time = ct;
+    }
 }
 
-void casino::session_update(name game_account, uint64_t ses_id, asset max_win_delta) {
+void casino::session_update(name game_account, asset max_win_delta) {
     require_auth(game_account);
-    const auto game_id = get_game_id(game_account);
-    verify_game(game_id);
-    session_update(ses_id, game_id, max_win_delta);
+    verify_account(game_account);
+    session_update(max_win_delta);
 }
 
-void casino::session_close(name game_account, uint64_t ses_id) {
+void casino::session_close(name game_account, asset quantity) {
     require_auth(game_account);
-    const auto game_id = get_game_id(game_account);
-    verify_game(game_id);
-    session_close(ses_id, game_id);
+    verify_account(game_account);
+    session_close(quantity);
 }
 
 uint32_t casino::get_profit_margin(uint64_t game_id) {

@@ -505,7 +505,6 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
     BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(sesupdate), game_account, mvo()
             ("game_account", game_account)
-            ("ses_id", 42)
             ("max_win_delta", STRSYM("10.0000"))
         )
     );
@@ -527,33 +526,51 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("270.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account), STRSYM("30.0000"));
 
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesupdate), game_account, mvo()
+            ("game_account", game_account)
+            ("max_win_delta", STRSYM("300.0000"))
+        )
+    );
+
+    // max transfer is 27 now
+
     BOOST_REQUIRE_EQUAL(
-        wasm_assert_msg("cannot withdraw more than 10% of account balance"),
+        wasm_assert_msg("quantity exceededs max transfer amount"),
         push_action(casino_account, N(withdraw), casino_account, mvo()
             ("beneficiary_account", casino_beneficiary_account)
             ("quantity", STRSYM("30.0000"))
         )
     );
 
-    BOOST_REQUIRE_EQUAL(success(),
-        transfer(casino_account, N(eosio.token), STRSYM("256.0000"), casino_account)
-    );
-
     BOOST_REQUIRE_EQUAL(
-        wasm_assert_msg("cannot withdraw: not enough account balance"),
+        wasm_assert_msg("already claimed within past week"),
         push_action(casino_account, N(withdraw), casino_account, mvo()
             ("beneficiary_account", casino_beneficiary_account)
-            ("quantity", STRSYM("14.0000"))
+            ("quantity", STRSYM("20.0000"))
         )
     );
 
+    produce_block(fc::seconds(seconds_per_month + 1));
+
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(sesupdate), game_account, mvo()
+        push_action(casino_account, N(sesclose), game_account, mvo()
             ("game_account", game_account)
-            ("ses_id", 42)
-            ("max_win_delta", STRSYM("10.0000"))
+            ("quantity", STRSYM("310.0000"))
         )
     );
+
+    // claim all except game profits
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", STRSYM("265.0000"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account), STRSYM("295.0000"));
+
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

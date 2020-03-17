@@ -50,20 +50,10 @@ using game_state_table = eosio::multi_index<"gamestate"_n, game_state_row>;
 struct [[eosio::table("global"), eosio::contract("casino")]] global_state {
     asset game_active_sessions_sum;
     asset game_profits_sum;
-    time_point last_claim_time;
+    time_point last_withdraw_time;
 };
 
 using global_state_singleton = eosio::singleton<"global"_n, global_state>;
-
-struct [[eosio::table("session"), eosio::contract("casino")]] session_state_row {
-    uint64_t ses_id;
-    uint64_t game_id;
-    asset max_win;
-
-    uint64_t primary_key() const { return ses_id; }
-};
-
-using session_state_table = eosio::multi_index<"sessionstate"_n, session_state_row>;
 
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
@@ -90,12 +80,13 @@ public:
     [[eosio::action("withdraw")]]
     void withdraw(name beneficiary_account, asset quantity);
     [[eosio::action("sesupdate")]]
-    void session_update(name game_account, uint64_t ses_id, asset max_win_delta);
+    void session_update(name game_account, asset max_win_delta);
     [[eosio::action("sesclose")]]
-    void session_close(name game_account, uint64_t ses_id);
+    void session_close(name game_account, asset quantity);
 
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
+    static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
     static constexpr int64_t useconds_per_month = 30 * useconds_per_day;
     static constexpr symbol core_symbol = symbol(symbol_code("BET"), 4);
     static const asset zero_asset;
@@ -183,32 +174,16 @@ private:
     }
 
     void verify_game(uint64_t game_id);
+    void verify_account(name game_account);
     uint64_t get_game_id(name game_account);
 
-    void session_update(uint64_t ses_id, uint64_t game_id, asset quantity) {
-        session_state_table sessions(_self, _self.value);
-        const auto itr = sessions.find(ses_id);
-        if (itr == sessions.end()) {
-            sessions.emplace(_self, [&](auto& row) {
-                row.ses_id = ses_id;
-                row.game_id = game_id;
-                row.max_win = quantity;
-            });
-        } else {
-            check(itr->game_id == game_id, "invalid game id");
-            sessions.modify(itr, _self, [&](auto& row) {
-                row.max_win += quantity;
-            });
-        }
+    void session_update(asset quantity) {
         gstate.game_active_sessions_sum += quantity;
     }
 
-    void session_close(uint64_t ses_id, uint64_t game_id) {
-        session_state_table sessions(_self, _self.value);
-        const auto itr = sessions.require_find(ses_id, "no active game session found");
-        check(itr->game_id == game_id, "invalid game id");
-        gstate.game_active_sessions_sum -= itr->max_win;
-        sessions.erase(itr);
+    void session_close(asset quantity) {
+        check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
+        gstate.game_active_sessions_sum -= quantity;
     }
 };
 
@@ -217,11 +192,11 @@ const asset casino::zero_asset = asset(0, casino::core_symbol);
 } // namespace casino
 
 namespace token {
-    struct account
-    {
+    struct account {
         asset balance;
         uint64_t primary_key() const { return balance.symbol.raw(); }
     };
+
     typedef eosio::multi_index<"accounts"_n, account> accounts;
 
     asset get_balance(name account, symbol s) {
