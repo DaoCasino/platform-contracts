@@ -5,8 +5,6 @@
 #include <eosio/asset.hpp>
 #include <platform/platform.hpp>
 
-using namespace eosio;
-
 namespace casino {
 
 using eosio::name;
@@ -15,6 +13,7 @@ using eosio::time_point;
 using eosio::current_time_point;
 using eosio::microseconds;
 using eosio::check;
+using eosio::symbol;
 
 using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
 
@@ -88,7 +87,7 @@ public:
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
     static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
     static constexpr int64_t useconds_per_month = 30 * useconds_per_day;
-    static constexpr symbol core_symbol = symbol(symbol_code("BET"), 4);
+    static constexpr symbol core_symbol = symbol(eosio::symbol_code("BET"), 4);
     static const asset zero_asset;
 private:
     version_singleton version;
@@ -193,13 +192,13 @@ const asset casino::zero_asset = asset(0, casino::core_symbol);
 
 namespace token {
     struct account {
-        asset balance;
+        eosio::asset balance;
         uint64_t primary_key() const { return balance.symbol.raw(); }
     };
 
     typedef eosio::multi_index<"accounts"_n, account> accounts;
 
-    asset get_balance(name account, symbol s) {
+    eosio::asset get_balance(eosio::name account, eosio::symbol s) {
         accounts accountstable("eosio.token"_n, account.value);
         return accountstable.get(s.code().raw()).balance;
     }
