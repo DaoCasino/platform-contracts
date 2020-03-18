@@ -9,7 +9,6 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     contract(receiver, code, ds),
     version(_self, _self.value),
     games(_self, _self.value),
-    owner_account(_self, _self.value),
     game_state(_self, _self.value),
     _gstate(_self, _self.value)
 {
@@ -20,7 +19,9 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
         _gstate.set(global_state{
             zero_asset,
             zero_asset,
-            current_time_point()
+            current_time_point(),
+            name(),
+            _self
         }, _self);
     }
     gstate = _gstate.get();
@@ -52,7 +53,7 @@ void casino::set_owner(name new_owner) {
     const auto old_owner = get_owner();
     require_auth(old_owner);
     check(is_account(new_owner), "new owner account does not exist");
-    owner_account.set(owner_row{new_owner}, old_owner);
+    gstate.owner = new_owner;
 }
 
 void casino::on_transfer(name game_account, name casino_account, eosio::asset quantity, std::string memo) {

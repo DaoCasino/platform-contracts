@@ -39,7 +39,9 @@ private:
 
 private:
     name get_platform() {
-        return global.get().platform;
+        const auto gl = global.get();
+        eosio::check(gl.platform != name(), "platform name isn't setted");
+        return gl.platform;
     }
 };
 

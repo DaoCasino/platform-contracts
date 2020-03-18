@@ -135,10 +135,10 @@ BOOST_FIXTURE_TEST_CASE(set_owner, casino_tester) try {
             ("new_owner", casino)
         )
     );
-    vector<char> data = get_row_by_account(casino_account, casino_account, N(owner), N(owner) );
+    vector<char> data = get_row_by_account(casino_account, casino_account, N(global), N(global) );
     BOOST_REQUIRE_EQUAL(data.empty(), false);
 
-    auto owner_row = abi_ser[casino_account].binary_to_variant("owner_row", data, abi_serializer_max_time);
+    auto owner_row = abi_ser[casino_account].binary_to_variant("global_state", data, abi_serializer_max_time);
     BOOST_REQUIRE_EQUAL(owner_row["owner"].as<name>(), casino);
 } FC_LOG_AND_RETHROW()
 
