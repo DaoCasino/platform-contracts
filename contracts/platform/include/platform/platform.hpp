@@ -83,6 +83,9 @@ public:
     [[eosio::action("setmetacas")]]
     void set_meta_casino(uint64_t id, bytes meta);
 
+    [[eosio::action("setrsacas")]]
+    void set_rsa_pubkey_casino(uint64_t id, const std::string& rsa_pubkey);
+
 
     [[eosio::action("addgame")]]
     void add_game(name contract, uint16_t params_cnt, bytes meta);
