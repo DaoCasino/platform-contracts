@@ -13,7 +13,6 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     game_state(_self, _self.value),
     _gstate(_self, _self.value)
 {
-    owner_account.set(owner_row{_self}, _self);
     version.set(version_row {CONTRACT_VERSION}, _self);
 
     if (!_gstate.exists()) {
@@ -27,9 +26,15 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     gstate = _gstate.get();
 }
 
+void casino::set_platform(name platform_name) {
+    require_auth(get_owner());
+    check(is_account(platform_name), "platform_name account doesn't exists");
+    gstate.platform = platform_name;
+}
+
 void casino::add_game(uint64_t game_id, game_params_type params) {
     require_auth(get_owner());
-    check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
+    check(platform::read::is_active_game(get_platform(), game_id), "the game was not verified by the platform");
     games.emplace(get_self(), [&](auto& row) {
         row.game_id = game_id;
         row.params = params;
@@ -54,7 +59,7 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
     if (game_account == get_self() || casino_account != get_self()) {
         return;
     }
-    platform::game_table platform_games(platform_contract, platform_contract.value);
+    platform::game_table platform_games(get_platform(), get_platform().value);
     auto games_idx = platform_games.get_index<"address"_n>();
 
     if (games_idx.find(game_account.value) != games_idx.end()) {
@@ -79,7 +84,7 @@ void casino::claim_profit(name game_account) {
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
     check(ct - get_last_claim_time(game_id) > microseconds(useconds_per_month), "already claimed within past month");
-    const auto beneficiary = platform::read::get_game(platform_contract, game_id).beneficiary;
+    const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
     const auto to_transfer = get_game_profits(game_id);
     transfer(beneficiary, to_transfer);
     sub_balance(game_id, to_transfer);
@@ -88,11 +93,11 @@ void casino::claim_profit(name game_account) {
 
 uint64_t casino::get_game_id(name game_account) {
     // get game throws if there's no game in the table
-    return platform::read::get_game(platform_contract, game_account).id;
+    return platform::read::get_game(get_platform(), game_account).id;
 }
 
 void casino::verify_game(uint64_t game_id) {
-    check(platform::read::is_active_game(platform_contract, game_id), "the game was not verified by the platform");
+    check(platform::read::is_active_game(get_platform(), game_id), "the game was not verified by the platform");
     check(is_active_game(game_id), "the game is not run by the casino");
 }
 
@@ -128,17 +133,17 @@ void casino::session_update(name game_account, asset max_win_delta) {
 void casino::session_close(name game_account, asset quantity) {
     require_auth(game_account);
     // throws if no game for a given account
-    const auto game_id = platform::read::get_game(platform_contract, game_account).id;
+    const auto game_id = platform::read::get_game(get_platform(), game_account).id;
     check(is_active_game(game_id), "no game found in the casino");
     session_close(quantity);
 }
 
 uint32_t casino::get_profit_margin(uint64_t game_id) {
-    return platform::read::get_game(platform_contract, game_id).profit_margin;
+    return platform::read::get_game(get_platform(), game_id).profit_margin;
 }
 
 asset casino::get_game_profits(uint64_t game_id) {
-    const auto game_row = platform::read::get_game(platform_contract, game_id);
+    const auto game_row = platform::read::get_game(get_platform(), game_id);
     return get_balance(game_id) * get_profit_margin(game_id) / percent_100;
 }
 

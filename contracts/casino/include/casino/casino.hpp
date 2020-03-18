@@ -50,6 +50,7 @@ struct [[eosio::table("global"), eosio::contract("casino")]] global_state {
     asset game_active_sessions_sum;
     asset game_profits_sum;
     time_point last_withdraw_time;
+    name platform;
 };
 
 using global_state_singleton = eosio::singleton<"global"_n, global_state>;
@@ -64,6 +65,8 @@ public:
         _gstate.set(gstate, _self);
     }
 
+    [[eosio::action("setplatform")]]
+    void set_platform(name platform_name);
     [[eosio::action("addgame")]]
     void add_game(uint64_t game_id, game_params_type params);
     [[eosio::action("rmgame")]]
@@ -99,7 +102,10 @@ private:
     global_state gstate;
 
     name get_owner() {
-        return owner_account.get().owner;
+        if (owner_account.exists())
+            return owner_account.get().owner;
+        else
+            return get_self();
     }
 
     uint32_t get_profit_margin(uint64_t game_id);
@@ -184,6 +190,10 @@ private:
     void session_close(asset quantity) {
         check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
         gstate.game_active_sessions_sum -= quantity;
+    }
+
+    name get_platform() {
+        return gstate.platform;
     }
 };
 
