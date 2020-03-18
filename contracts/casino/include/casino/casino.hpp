@@ -13,6 +13,7 @@ using eosio::time_point;
 using eosio::current_time_point;
 using eosio::microseconds;
 using eosio::check;
+using eosio::symbol;
 
 using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
 
@@ -45,11 +46,23 @@ struct [[eosio::table("gamestate"), eosio::contract("casino")]] game_state_row {
 
 using game_state_table = eosio::multi_index<"gamestate"_n, game_state_row>;
 
+struct [[eosio::table("global"), eosio::contract("casino")]] global_state {
+    asset game_active_sessions_sum;
+    asset game_profits_sum;
+    time_point last_withdraw_time;
+};
+
+using global_state_singleton = eosio::singleton<"global"_n, global_state>;
+
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
 
     casino(name receiver, name code, eosio::datastream<const char*> ds);
+
+    ~casino() {
+        _gstate.set(gstate, _self);
+    }
 
     [[eosio::action("addgame")]]
     void add_game(uint64_t game_id, game_params_type params);
@@ -63,18 +76,39 @@ public:
     void on_loss(name game_account, name player_account, eosio::asset quantity);
     [[eosio::action("claimprofit")]]
     void claim_profit(name game_account);
+    [[eosio::action("withdraw")]]
+    void withdraw(name beneficiary_account, asset quantity);
+    [[eosio::action("sesupdate")]]
+    void session_update(name game_account, asset max_win_delta);
+    [[eosio::action("sesclose")]]
+    void session_close(name game_account, asset quantity);
 
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
+    static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
     static constexpr int64_t useconds_per_month = 30 * useconds_per_day;
+    static constexpr symbol core_symbol = symbol(eosio::symbol_code("BET"), 4);
+    static const asset zero_asset;
+    static const int percent_100 = 100;
 private:
     version_singleton version;
     game_table games;
     owner_singleton owner_account;
     game_state_table game_state;
+    global_state_singleton _gstate;
+    global_state gstate;
 
     name get_owner() {
         return owner_account.get().owner;
+    }
+
+    uint32_t get_profit_margin(uint64_t game_id);
+    asset get_game_profits(uint64_t game_id);
+
+    asset get_balance(uint64_t game_id) const {
+        game_state_table game_state(_self, _self.value);
+        const auto itr = game_state.find(game_id);
+        return itr != game_state.end() ? itr->quantity : asset();
     }
 
     void add_balance(uint64_t game_id, asset quantity) {
@@ -91,6 +125,7 @@ private:
                 row.quantity += quantity;
             });
         }
+        gstate.game_profits_sum += quantity * get_profit_margin(game_id) / 100;
     }
 
     void sub_balance(uint64_t game_id, asset quantity) {
@@ -107,12 +142,7 @@ private:
                 row.quantity -= quantity;
             });
         }
-    }
-
-    asset get_balance(uint64_t game_id) const {
-        game_state_table game_state(_self, _self.value);
-        const auto itr = game_state.find(game_id);
-        return itr != game_state.end() ? itr->quantity : asset();
+        gstate.game_profits_sum -= quantity * get_profit_margin(game_id) / 100;
     }
 
     bool is_active_game(uint64_t game_id) const {
@@ -144,7 +174,33 @@ private:
     }
 
     void verify_game(uint64_t game_id);
+    void verify_account(name game_account);
     uint64_t get_game_id(name game_account);
+
+    void session_update(asset quantity) {
+        gstate.game_active_sessions_sum += quantity;
+    }
+
+    void session_close(asset quantity) {
+        check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
+        gstate.game_active_sessions_sum -= quantity;
+    }
 };
 
+const asset casino::zero_asset = asset(0, casino::core_symbol);
+
 } // namespace casino
+
+namespace token {
+    struct account {
+        eosio::asset balance;
+        uint64_t primary_key() const { return balance.symbol.raw(); }
+    };
+
+    typedef eosio::multi_index<"accounts"_n, account> accounts;
+
+    eosio::asset get_balance(eosio::name account, eosio::symbol s) {
+        accounts accountstable("eosio.token"_n, account.value);
+        return accountstable.get(s.code().raw()).balance;
+    }
+}
