@@ -7,8 +7,8 @@ using eosio::testing::read_abi;
 
 namespace testing {
 
-static const eosio::chain::name platform_name = N(${PLATFORM_CONTRACT});
-static const eosio::chain::name events_name = N(${EVENTS_CONTRACT});
+static const eosio::chain::name platform_name = N(platform);
+static const eosio::chain::name events_name = N(events);
 
 struct contracts {
     static std::string version() { return "${CONTRACT_VERSION}"; };
