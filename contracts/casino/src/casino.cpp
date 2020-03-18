@@ -111,7 +111,7 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
         transfer(beneficiary_account, quantity);
     } else {
         check(account_balance > gstate.game_profits_sum, "developer profits exceed account balance");
-        const asset max_transfer = account_balance / 10;
+        const asset max_transfer = std::min(account_balance / 10, account_balance - gstate.game_profits_sum);
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
         check(ct - gstate.last_withdraw_time > microseconds(useconds_per_week), "already claimed within past week");
         transfer(beneficiary_account, quantity);
@@ -127,7 +127,9 @@ void casino::session_update(name game_account, asset max_win_delta) {
 
 void casino::session_close(name game_account, asset quantity) {
     require_auth(game_account);
-    verify_account(game_account);
+    // throws if no game for a given account
+    const auto game_id = platform::read::get_game(platform_contract, game_account).id;
+    check(is_active_game(game_id), "no game found in the casino");
     session_close(quantity);
 }
 
@@ -137,7 +139,7 @@ uint32_t casino::get_profit_margin(uint64_t game_id) {
 
 asset casino::get_game_profits(uint64_t game_id) {
     const auto game_row = platform::read::get_game(platform_contract, game_id);
-    return get_balance(game_id) * get_profit_margin(game_id) / 100;
+    return get_balance(game_id) * get_profit_margin(game_id) / percent_100;
 }
 
 } // namespace casino

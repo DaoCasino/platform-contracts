@@ -89,6 +89,7 @@ public:
     static constexpr int64_t useconds_per_month = 30 * useconds_per_day;
     static constexpr symbol core_symbol = symbol(eosio::symbol_code("BET"), 4);
     static const asset zero_asset;
+    static const int percent_100 = 100;
 private:
     version_singleton version;
     game_table games;
