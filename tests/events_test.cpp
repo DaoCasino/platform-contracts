@@ -18,6 +18,10 @@ public:
 
         deploy_contract<contracts::platform>(platform_name);
         deploy_contract<contracts::events>(events_name);
+
+        push_action(events_name, N(setplatform), events_name, mvo()
+            ("platform_name", platform_name)
+        );
     }
 
     fc::variant get_casino(uint64_t casino_id) {

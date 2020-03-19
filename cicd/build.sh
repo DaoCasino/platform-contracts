@@ -17,7 +17,6 @@ readonly build_dir="$PROGPATH"/../build
 
 #---------- command-line options ----------#
 
-env=dev
 build_type=RelWithDebInfo
 #local_clang=n
 verbose=n
@@ -32,8 +31,6 @@ usage() {
   echo
   echo "Options:"
   echo
-  echo "  --env <environment>  : environment: dev, testnet, mainnet;"
-  echo "                         default: $env"
   echo "  --build-type <type>  : build type: Debug, Release, RelWithDebInfo, or MinSizeRel;"
   echo "                         default: $build_type"
   #echo "  --local-clang        : build and use a partucular version of Clang toolchain locally"
@@ -44,7 +41,6 @@ usage() {
 }
 
 OPTS="$( getopt -o "h" -l "\
-env:,\
 build-type:,\
 build-tests,\
 verbose,\
@@ -52,7 +48,6 @@ help" -n "$PROGNAME" -- "$@" )"
 eval set -- "$OPTS"
 while true; do
   case "${1:-}" in
-  (--env)          env="$2"        ; shift 2; readonly env ;;
   (--build-type)   build_type="$2" ; shift 2 ; readonly build_type ;;
   #(--local-clang)  local_clang=y   ; shift   ; readonly local_clang ;;
   (--build-tests)  build_tests=y   ; shift   ; readonly build_tests ;;
@@ -68,7 +63,6 @@ unset OPTS
 
 log "Configuration:"
 log
-log "  evn         = $env"
 log "  build type  = $build_type"
 log "  node root   = $node_root"
 log "  build tests = $build_tests"
@@ -76,9 +70,6 @@ log "  # of CPUs   = $ncores"
 #log "  cmake executable  = ${CMAKE_CMD:-"<not found>"}"
 
 ###
-
-. "${BASH_SOURCE[0]%/*}/../env/$env.env" # enable env vars
-
 cmake_flags=(
   -D CMAKE_BUILD_TYPE="$build_type"
   -D CMAKE_MODULE_PATH="$node_root/lib/cmake/$project"
