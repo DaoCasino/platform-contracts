@@ -70,6 +70,15 @@ void platform::set_meta_casino(uint64_t id, bytes meta) {
     });
 }
 
+void platform::set_rsa_pubkey_casino(uint64_t id, const std::string& rsa_pubkey) {
+    require_auth(get_self());
+
+    const auto casino_itr = casinos.require_find(id, "casino not found");
+    casinos.modify(casino_itr, get_self(), [&](auto& row) {
+        row.rsa_pubkey = rsa_pubkey;
+    });
+}
+
 
 void platform::add_game(name contract, uint16_t params_cnt, bytes meta) {
     require_auth(get_self());
