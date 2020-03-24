@@ -16,7 +16,7 @@ struct [[eosio::table("version"), eosio::contract("platform")]] version_row {
 };
 using version_singleton = eosio::singleton<"version"_n, version_row>;
 
-struct [[eosio::table("version"), eosio::contract("platform")]] global_row {
+struct [[eosio::table("global"), eosio::contract("platform")]] global_row {
     uint64_t casinos_seq { 0u }; // <-- used for casino id auto increment
     uint64_t games_seq { 0u }; // <-- used for game id auto increment
     std::string rsa_pubkey;
