@@ -67,7 +67,7 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
         // get game throws if there's no game in the table
         const auto game_id = get_game_id(game_account);
         verify_game(game_id);
-        add_balance(game_id, quantity);
+        add_balance(game_id, quantity * get_profit_margin(game_id) / percent_100);
     }
 }
 
@@ -76,8 +76,8 @@ void casino::on_loss(name game_account, name player_account, eosio::asset quanti
     check(is_account(player_account), "to account does not exist");
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
-    transfer(player_account, quantity);
-    sub_balance(game_id, quantity);
+    transfer(player_account, quantity, "player winnings");
+    sub_balance(game_id, quantity * get_profit_margin(game_id) / percent_100);
 }
 
 void casino::claim_profit(name game_account) {
@@ -86,8 +86,9 @@ void casino::claim_profit(name game_account) {
     verify_game(game_id);
     check(ct - get_last_claim_time(game_id) > microseconds(useconds_per_month), "already claimed within past month");
     const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
-    const auto to_transfer = get_game_profits(game_id);
-    transfer(beneficiary, to_transfer);
+    const auto to_transfer = get_balance(game_id);
+    check(to_transfer > zero_asset, "cannot claim a negative profit");
+    transfer(beneficiary, to_transfer, "game developer profits");
     sub_balance(game_id, to_transfer);
     update_last_claim_time(game_id);
 }
@@ -114,13 +115,13 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
     if (account_balance > gstate.game_active_sessions_sum + gstate.game_profits_sum) {
         const asset max_transfer = account_balance - gstate.game_active_sessions_sum - gstate.game_profits_sum;
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
-        transfer(beneficiary_account, quantity);
+        transfer(beneficiary_account, quantity, "casino profits");
     } else {
         check(account_balance > gstate.game_profits_sum, "developer profits exceed account balance");
         const asset max_transfer = std::min(account_balance / 10, account_balance - gstate.game_profits_sum);
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
         check(ct - gstate.last_withdraw_time > microseconds(useconds_per_week), "already claimed within past week");
-        transfer(beneficiary_account, quantity);
+        transfer(beneficiary_account, quantity, "casino profits");
         gstate.last_withdraw_time = ct;
     }
 }
@@ -141,11 +142,6 @@ void casino::session_close(name game_account, asset quantity) {
 
 uint32_t casino::get_profit_margin(uint64_t game_id) {
     return platform::read::get_game(get_platform(), game_id).profit_margin;
-}
-
-asset casino::get_game_profits(uint64_t game_id) {
-    const auto game_row = platform::read::get_game(get_platform(), game_id);
-    return get_balance(game_id) * get_profit_margin(game_id) / percent_100;
 }
 
 } // namespace casino
