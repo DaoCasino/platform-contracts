@@ -40,13 +40,21 @@ void casino::add_game(uint64_t game_id, game_params_type params) {
         row.game_id = game_id;
         row.params = params;
     });
+    game_state.emplace(get_self(), [&](auto& row) {
+        row.game_id = game_id;
+        row.balance = zero_asset;
+        row.last_claim_time = current_time_point();
+        row.active_sessions_sum = zero_asset;
+    });
 }
 
 void casino::remove_game(uint64_t game_id) {
     require_auth(get_owner());
-    const auto itr = games.find(game_id);
-    check(itr != games.end(), "the game was not added");
-    games.erase(itr);
+    const auto game_itr = games.require_find(game_id, "the game was not added");
+    const auto game_state_itr = game_state.require_find(game_id, "game is not in game state");
+    check(game_state_itr->active_sessions_sum == zero_asset, "trying to remove a game with non-zero active sessions sum");
+    game_state.erase(game_state_itr);
+    games.erase(game_itr);
 }
 
 void casino::set_owner(name new_owner) {
@@ -103,10 +111,6 @@ void casino::verify_game(uint64_t game_id) {
     check(is_active_game(game_id), "the game is not run by the casino");
 }
 
-void casino::verify_account(name game_account) {
-    verify_game(get_game_id(game_account));
-}
-
 void casino::withdraw(name beneficiary_account, asset quantity) {
     require_auth(get_owner());
     const auto ct = current_time_point();
@@ -128,16 +132,17 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
 
 void casino::session_update(name game_account, asset max_win_delta) {
     require_auth(game_account);
-    verify_account(game_account);
-    session_update(max_win_delta);
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+    session_update(game_id, max_win_delta);
 }
 
 void casino::session_close(name game_account, asset quantity) {
     require_auth(game_account);
     // throws if no game for a given account
-    const auto game_id = platform::read::get_game(get_platform(), game_account).id;
+    const auto game_id = get_game_id(game_account);
     check(is_active_game(game_id), "no game found in the casino");
-    session_close(quantity);
+    session_close(game_id, quantity);
 }
 
 uint32_t casino::get_profit_margin(uint64_t game_id) {

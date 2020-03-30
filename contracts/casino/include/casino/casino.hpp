@@ -32,9 +32,10 @@ struct [[eosio::table("version"), eosio::contract("casino")]] version_row {
 using version_singleton = eosio::singleton<"version"_n, version_row>;
 
 struct [[eosio::table("gamestate"), eosio::contract("casino")]] game_state_row {
-    uint64_t game_id; // unique id of the game - global to casino and platform contracts
+    uint64_t game_id;
     asset balance; // game's balance aka not clamed profits
     eosio::time_point last_claim_time; // last time of claim
+    asset active_sessions_sum; // sum of tokens between currently active sessions
 
     uint64_t primary_key() const { return game_id; }
 };
@@ -104,39 +105,23 @@ private:
     uint32_t get_profit_margin(uint64_t game_id);
 
     asset get_balance(uint64_t game_id) const {
-        const auto itr = game_state.require_find(game_id, "game was not found");
+        const auto itr = game_state.require_find(game_id, "game not found");
         return itr->balance;
     }
 
     void add_balance(uint64_t game_id, asset quantity) {
-        auto itr = game_state.find(game_id);
-        if (itr == game_state.end()) {
-            game_state.emplace(get_self(), [&](auto& row) {
-                row.game_id = game_id;
-                row.balance = quantity;
-                row.last_claim_time = current_time_point();
-            });
-        } else {
-            game_state.modify(itr, get_self(), [&](auto& row) {
-                row.balance += quantity;
-            });
-        }
+        const auto itr = game_state.require_find(game_id, "game not found");
+        game_state.modify(itr, get_self(), [&](auto& row) {
+            row.balance += quantity;
+        });
         gstate.game_profits_sum += quantity;
     }
 
     void sub_balance(uint64_t game_id, asset quantity) {
-        auto itr = game_state.find(game_id);
-        if (itr == game_state.end()) {
-            game_state.emplace(get_self(), [&](auto& row) {
-                row.game_id = game_id;
-                row.balance = -quantity;
-                row.last_claim_time = current_time_point();
-            });
-        } else {
-            game_state.modify(itr, get_self(), [&](auto& row) {
-                row.balance -= quantity;
-            });
-        }
+        const auto itr = game_state.require_find(game_id, "game not found");
+        game_state.modify(itr, get_self(), [&](auto& row) {
+            row.balance -= quantity;
+        });
         gstate.game_profits_sum -= quantity * get_profit_margin(game_id) / 100;
     }
 
@@ -146,7 +131,7 @@ private:
     }
 
     time_point get_last_claim_time(uint64_t game_id) const {
-        const auto itr = game_state.require_find(game_id, "game was not found");
+        const auto itr = game_state.require_find(game_id, "game not found");
         return itr->last_claim_time;
     }
 
@@ -170,12 +155,20 @@ private:
     void verify_account(name game_account);
     uint64_t get_game_id(name game_account);
 
-    void session_update(asset quantity) {
+    void session_update(uint64_t game_id, asset quantity) {
+        const auto itr = game_state.require_find(game_id, "game not found");
+        game_state.modify(itr, _self, [&](auto& row) {
+            row.active_sessions_sum += quantity;
+        });
         gstate.game_active_sessions_sum += quantity;
     }
 
-    void session_close(asset quantity) {
-        check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
+    void session_close(uint64_t game_id, asset quantity) {
+        const auto itr = game_state.require_find(game_id, "game not found");
+        check(quantity <= itr->active_sessions_sum, "invalid quantity in session close");
+        game_state.modify(itr, _self, [&](auto& row) {
+            row.active_sessions_sum -= quantity;
+        });
         gstate.game_active_sessions_sum -= quantity;
     }
 

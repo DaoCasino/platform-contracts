@@ -90,7 +90,7 @@ BOOST_FIXTURE_TEST_CASE(add_game_verify_failure, casino_tester) try {
     );
 } FC_LOG_AND_RETHROW()
 
-BOOST_FIXTURE_TEST_CASE(revmove_game, casino_tester) try {
+BOOST_FIXTURE_TEST_CASE(remove_game, casino_tester) try {
 
     BOOST_REQUIRE_EQUAL(success(),
         push_action(platform_name, N(addgame), platform_name, mvo()
@@ -115,6 +115,39 @@ BOOST_FIXTURE_TEST_CASE(revmove_game, casino_tester) try {
 
     auto game = get_game(0);
     BOOST_REQUIRE(game.is_null());
+} FC_LOG_AND_RETHROW()
+
+
+BOOST_FIXTURE_TEST_CASE(remove_game_active_session_failure, casino_tester) try {
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", casino_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesupdate), casino_account, mvo()
+            ("game_account", casino_account)
+            ("max_win_delta", STRSYM("10.0000"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        wasm_assert_msg("trying to remove a game with non-zero active sessions sum"),
+        push_action(casino_account, N(rmgame), casino_account, mvo()
+            ("game_id", 0)
+        )
+    );
+
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(remove_game_not_added_failure, casino_tester) try {
