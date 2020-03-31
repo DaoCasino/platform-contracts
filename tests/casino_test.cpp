@@ -578,6 +578,12 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account), STRSYM("30.0000"));
 
     BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newsession), game_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(sesupdate), game_account, mvo()
             ("game_account", game_account)
             ("max_win_delta", STRSYM("300.0000"))
