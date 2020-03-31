@@ -122,11 +122,10 @@ private:
         game_state.modify(itr, get_self(), [&](auto& row) {
             row.balance -= quantity;
         });
-        gstate.game_profits_sum -= quantity * get_profit_margin(game_id) / 100;
+        gstate.game_profits_sum -= quantity;
     }
 
     bool is_active_game(uint64_t game_id) const {
-        game_table games(_self, _self.value);
         return games.find(game_id) != games.end();
     }
 
