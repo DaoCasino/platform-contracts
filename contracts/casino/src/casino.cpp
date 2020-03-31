@@ -19,6 +19,7 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
         _gstate.set(global_state{
             zero_asset,
             zero_asset,
+            0,
             current_time_point(),
             name(),
             _self
@@ -44,6 +45,7 @@ void casino::add_game(uint64_t game_id, game_params_type params) {
         row.game_id = game_id;
         row.balance = zero_asset;
         row.last_claim_time = current_time_point();
+        row.active_sessions_amount = 0;
         row.active_sessions_sum = zero_asset;
     });
 }
@@ -143,6 +145,13 @@ void casino::session_close(name game_account, asset quantity) {
     const auto game_id = get_game_id(game_account);
     check(is_active_game(game_id), "no game found in the casino");
     session_close(game_id, quantity);
+}
+
+void casino::on_new_session(name game_account) {
+    require_auth(game_account);
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+    on_new_session(game_id);
 }
 
 uint32_t casino::get_profit_margin(uint64_t game_id) const {

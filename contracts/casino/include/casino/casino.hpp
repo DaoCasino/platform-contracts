@@ -35,6 +35,7 @@ struct [[eosio::table("gamestate"), eosio::contract("casino")]] game_state_row {
     uint64_t game_id;
     asset balance; // game's balance aka not clamed profits
     eosio::time_point last_claim_time; // last time of claim
+    uint64_t active_sessions_amount; //
     asset active_sessions_sum; // sum of tokens between currently active sessions
 
     uint64_t primary_key() const { return game_id; }
@@ -45,6 +46,7 @@ using game_state_table = eosio::multi_index<"gamestate"_n, game_state_row>;
 struct [[eosio::table("global"), eosio::contract("casino")]] global_state {
     asset game_active_sessions_sum; // total sum of currently active sessions between all games
     asset game_profits_sum; // total sum of game developer profits
+    uint64_t active_sessions_amount; // amount of active sessions
     time_point last_withdraw_time; // casino last withdraw time
     name platform; // platfrom account name
     name owner; // owner has the rights to withdraw and update the contract state
@@ -83,6 +85,8 @@ public:
     void session_update(name game_account, asset max_win_delta);
     [[eosio::action("sesclose")]]
     void session_close(name game_account, asset quantity);
+    [[eosio::action("newsession")]]
+    void on_new_session(name game_account);
 
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
@@ -165,19 +169,42 @@ private:
     void session_close(uint64_t game_id, asset quantity) {
         const auto itr = game_state.require_find(game_id, "game not found");
         check(quantity <= itr->active_sessions_sum, "invalid quantity in session close");
+        check(itr->active_sessions_amount, "no active sessions");
         game_state.modify(itr, _self, [&](auto& row) {
             row.active_sessions_sum -= quantity;
+            row.active_sessions_amount--;
         });
         gstate.game_active_sessions_sum -= quantity;
+        gstate.active_sessions_amount--;
+    }
+
+    void on_new_session(uint64_t game_id) {
+        const auto itr = game_state.require_find(game_id);
+        game_state.modify(itr, _self, [&](auto& row) {
+            row.active_sessions_amount++;
+        });
+        gstate.active_sessions_amount++;
     }
 
     name get_platform() const {
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
     }
-};
+}; // casino contract
 
 const asset casino::zero_asset = asset(0, casino::core_symbol);
+
+namespace read {
+    static uint64_t get_active_sessions_amount(name casino_contract, uint64_t game_id) {
+        game_state_table game_state(casino_contract, casino_contract.value);
+        return game_state.require_find(game_id)->active_sessions_amount;
+    }
+
+    static uint64_t get_total_active_sessions_amount(name casino_contract) {
+        global_state_singleton global_state(casino_contract, casino_contract.value);
+        return global_state.get_or_default().active_sessions_amount;
+    }
+} // ns read
 
 } // namespace casino
 
