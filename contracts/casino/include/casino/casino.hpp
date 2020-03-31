@@ -169,6 +169,7 @@ private:
     void session_close(uint64_t game_id, asset quantity) {
         const auto itr = game_state.require_find(game_id, "game not found");
         check(quantity <= itr->active_sessions_sum, "invalid quantity in session close");
+        check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
         check(itr->active_sessions_amount, "no active sessions");
         game_state.modify(itr, _self, [&](auto& row) {
             row.active_sessions_sum -= quantity;
