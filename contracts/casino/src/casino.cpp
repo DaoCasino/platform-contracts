@@ -145,7 +145,7 @@ void casino::session_close(name game_account, asset quantity) {
     session_close(game_id, quantity);
 }
 
-uint32_t casino::get_profit_margin(uint64_t game_id) {
+uint32_t casino::get_profit_margin(uint64_t game_id) const {
     return platform::read::get_game(get_platform(), game_id).profit_margin;
 }
 

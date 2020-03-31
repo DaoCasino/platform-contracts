@@ -102,7 +102,7 @@ private:
         return gstate.owner;
     }
 
-    uint32_t get_profit_margin(uint64_t game_id);
+    uint32_t get_profit_margin(uint64_t game_id) const;
 
     asset get_balance(uint64_t game_id) const {
         const auto itr = game_state.require_find(game_id, "game not found");
@@ -172,7 +172,7 @@ private:
         gstate.game_active_sessions_sum -= quantity;
     }
 
-    name get_platform() {
+    name get_platform() const {
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
     }
