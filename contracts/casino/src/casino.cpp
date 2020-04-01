@@ -40,6 +40,7 @@ void casino::add_game(uint64_t game_id, game_params_type params) {
     games.emplace(get_self(), [&](auto& row) {
         row.game_id = game_id;
         row.params = params;
+        row.paused = false;
     });
     game_state.emplace(get_self(), [&](auto& row) {
         row.game_id = game_id;
@@ -54,7 +55,7 @@ void casino::remove_game(uint64_t game_id) {
     require_auth(get_owner());
     const auto game_itr = games.require_find(game_id, "the game was not added");
     const auto game_state_itr = game_state.require_find(game_id, "game is not in game state");
-    check(game_state_itr->active_sessions_sum == zero_asset, "trying to remove a game with non-zero active sessions sum");
+    check(!game_state_itr->active_sessions_amount, "trying to remove a game with non-zero active sessions");
     game_state.erase(game_state_itr);
     games.erase(game_itr);
 }
@@ -110,7 +111,7 @@ uint64_t casino::get_game_id(name game_account) {
 
 void casino::verify_game(uint64_t game_id) {
     check(platform::read::is_active_game(get_platform(), game_id), "the game was not verified by the platform");
-    check(is_active_game(game_id), "the game is not run by the casino");
+    check(is_active_game(game_id), "the game is paused");
 }
 
 void casino::withdraw(name beneficiary_account, asset quantity) {
@@ -145,7 +146,6 @@ void casino::session_close(name game_account, asset quantity) {
     require_auth(game_account);
     // throws if no game for a given account
     const auto game_id = get_game_id(game_account);
-    check(is_active_game(game_id), "no game found in the casino");
     session_close(game_id, quantity);
 }
 
@@ -154,6 +154,24 @@ void casino::on_new_session(name game_account) {
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
     on_new_session(game_id);
+}
+
+void casino::on_session_close(name game_account) {
+    require_auth(game_account);
+    const auto game_id = get_game_id(game_account);
+    on_session_close(game_id);
+}
+
+void casino::pause_game(uint64_t game_id, bool pause) {
+    require_auth(get_self());
+
+    const auto game_itr = games.require_find(game_id, "game not found");
+    const auto game_state_itr = game_state.require_find(game_id, "game not found");
+    check(!game_state_itr->active_sessions_amount, "game has active sessions");
+
+    games.modify(game_itr, get_self(), [&](auto& row) {
+        row.paused = pause;
+    });
 }
 
 uint32_t casino::get_profit_margin(uint64_t game_id) const {

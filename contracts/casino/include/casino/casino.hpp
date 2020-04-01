@@ -20,6 +20,7 @@ using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
 struct [[eosio::table("game"), eosio::contract("casino")]] game_row {
     uint64_t game_id; // unique id of the game - global to casino and platform contracts
     game_params_type params; // game params is simply a vector of integer pairs
+    bool paused;
 
     uint64_t primary_key() const { return game_id; }
 };
@@ -87,6 +88,10 @@ public:
     void session_close(name game_account, asset quantity);
     [[eosio::action("newsession")]]
     void on_new_session(name game_account);
+    [[eosio::action("closesession")]]
+    void on_session_close(name game_account);
+    [[eosio::action("pausegame")]]
+    void pause_game(uint64_t game_id, bool pause);
 
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
@@ -130,7 +135,7 @@ private:
     }
 
     bool is_active_game(uint64_t game_id) const {
-        return games.find(game_id) != games.end();
+        return !games.require_find(game_id, "game not found")->paused;
     }
 
     time_point get_last_claim_time(uint64_t game_id) const {
@@ -171,6 +176,8 @@ private:
         check(quantity <= itr->active_sessions_sum, "invalid quantity in session close");
         check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
         check(itr->active_sessions_amount, "no active sessions");
+        check(gstate.active_sessions_amount, "no active sesions");
+
         game_state.modify(itr, _self, [&](auto& row) {
             row.active_sessions_sum -= quantity;
             row.active_sessions_amount--;
@@ -180,11 +187,21 @@ private:
     }
 
     void on_new_session(uint64_t game_id) {
-        const auto itr = game_state.require_find(game_id);
+        const auto itr = game_state.require_find(game_id, "game not found");
         game_state.modify(itr, _self, [&](auto& row) {
             row.active_sessions_amount++;
         });
         gstate.active_sessions_amount++;
+    }
+
+    void on_session_close(uint64_t game_id) {
+        const auto itr = game_state.require_find(game_id, "game not found");
+        check(itr->active_sessions_amount, "no active sessions");
+        check(gstate.active_sessions_amount, "no active sesions");
+        game_state.modify(itr, _self, [&](auto& row) {
+            row.active_sessions_amount--;
+        });
+        gstate.active_sessions_amount--;
     }
 
     name get_platform() const {
