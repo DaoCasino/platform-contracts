@@ -75,9 +75,7 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
     auto games_idx = platform_games.get_index<"address"_n>();
 
     if (games_idx.find(game_account.value) != games_idx.end()) {
-        // get game throws if there's no game in the table
         const auto game_id = get_game_id(game_account);
-        verify_game(game_id);
         add_balance(game_id, quantity * get_profit_margin(game_id) / percent_100);
     }
 }
@@ -86,7 +84,6 @@ void casino::on_loss(name game_account, name player_account, eosio::asset quanti
     require_auth(game_account);
     check(is_account(player_account), "to account does not exist");
     const auto game_id = get_game_id(game_account);
-    verify_game(game_id);
     transfer(player_account, quantity, "player winnings");
     sub_balance(game_id, quantity * get_profit_margin(game_id) / percent_100);
 }
@@ -94,7 +91,6 @@ void casino::on_loss(name game_account, name player_account, eosio::asset quanti
 void casino::claim_profit(name game_account) {
     const auto ct = current_time_point();
     const auto game_id = get_game_id(game_account);
-    verify_game(game_id);
     check(ct - get_last_claim_time(game_id) > microseconds(useconds_per_month), "already claimed within past month");
     const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
     const auto to_transfer = get_balance(game_id);
@@ -137,16 +133,12 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
 
 void casino::session_update(name game_account, asset max_win_delta) {
     require_auth(game_account);
-    const auto game_id = get_game_id(game_account);
-    verify_game(game_id);
-    session_update(game_id, max_win_delta);
+    session_update(get_game_id(game_account), max_win_delta);
 }
 
 void casino::session_close(name game_account, asset quantity) {
     require_auth(game_account);
-    // throws if no game for a given account
-    const auto game_id = get_game_id(game_account);
-    session_close(game_id, quantity);
+    session_close(get_game_id(game_account), quantity);
 }
 
 void casino::on_new_session(name game_account) {
@@ -158,8 +150,7 @@ void casino::on_new_session(name game_account) {
 
 void casino::on_session_close(name game_account) {
     require_auth(game_account);
-    const auto game_id = get_game_id(game_account);
-    on_session_close(game_id);
+    on_session_close(get_game_id(game_account));
 }
 
 void casino::pause_game(uint64_t game_id, bool pause) {
@@ -167,7 +158,6 @@ void casino::pause_game(uint64_t game_id, bool pause) {
 
     const auto game_itr = games.require_find(game_id, "game not found");
     const auto game_state_itr = game_state.require_find(game_id, "game not found");
-    check(!game_state_itr->active_sessions_amount, "game has active sessions");
 
     games.modify(game_itr, get_self(), [&](auto& row) {
         row.paused = pause;

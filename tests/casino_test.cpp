@@ -288,38 +288,7 @@ BOOST_FIXTURE_TEST_CASE(on_transfer_from_inactive_casino_game, casino_tester) tr
     transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
 
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("300.0000"));
-    BOOST_REQUIRE_EQUAL(
-        wasm_assert_msg("the game is paused"),
-        transfer(game_account, casino_account, STRSYM("3.0000"), game_account)
-    );
-} FC_LOG_AND_RETHROW()
-
-BOOST_FIXTURE_TEST_CASE(on_transfer_from_inactive_platform_game, casino_tester) try {
-    name game_account = N(game.boy);
-    create_accounts({
-        game_account
-    });
-
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(platform_name, N(addgame), platform_name, mvo()
-            ("contract", game_account)
-            ("params_cnt", 1)
-            ("meta", bytes())
-        )
-    );
-
-    BOOST_REQUIRE_EQUAL(success(),
-        push_action(platform_name, N(pausegame), platform_name, mvo()
-            ("id", 0)
-            ("pause", true)
-        )
-    );
-
-    transfer(config::system_account_name, game_account, STRSYM("3.0000"));
-    transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
-
-    BOOST_REQUIRE_EQUAL(
-        wasm_assert_msg("the game was not verified by the platform"),
         transfer(game_account, casino_account, STRSYM("3.0000"), game_account)
     );
 } FC_LOG_AND_RETHROW()
@@ -411,42 +380,6 @@ BOOST_FIXTURE_TEST_CASE(on_loss_from_nonexistent_platform_game, casino_tester) t
 
     BOOST_REQUIRE_EQUAL(
         wasm_assert_msg("no game found for a given account"),
-        push_action(casino_account, N(onloss), game_account, mvo()
-            ("game_account", game_account)
-            ("player_account", player_account)
-            ("quantity", STRSYM("3.0000"))
-        )
-    );
-} FC_LOG_AND_RETHROW()
-
-BOOST_FIXTURE_TEST_CASE(on_loss_from_inactive_platform_game, casino_tester) try {
-    name game_account = N(game.boy);
-    name player_account = N(din.don);
-
-    create_accounts({
-        game_account,
-        player_account
-    });
-    transfer(config::system_account_name, game_account, STRSYM("3.0000"));
-    transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
-
-    BOOST_REQUIRE_EQUAL(success(),
-        push_action(platform_name, N(addgame), platform_name, mvo()
-            ("contract", game_account)
-            ("params_cnt", 1)
-            ("meta", bytes())
-        )
-    );
-
-    BOOST_REQUIRE_EQUAL(success(),
-        push_action(platform_name, N(pausegame), platform_name, mvo()
-            ("id", 0)
-            ("pause", true)
-        )
-    );
-
-    BOOST_REQUIRE_EQUAL(
-        wasm_assert_msg("the game was not verified by the platform"),
         push_action(casino_account, N(onloss), game_account, mvo()
             ("game_account", game_account)
             ("player_account", player_account)
