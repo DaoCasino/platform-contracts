@@ -35,7 +35,7 @@ struct [[eosio::table("gamestate"), eosio::contract("casino")]] game_state_row {
     uint64_t game_id;
     asset balance; // game's balance aka not clamed profits
     eosio::time_point last_claim_time; // last time of claim
-    uint64_t active_sessions_amount; //
+    uint64_t active_sessions_amount;
     asset active_sessions_sum; // sum of tokens between currently active sessions
 
     uint64_t primary_key() const { return game_id; }

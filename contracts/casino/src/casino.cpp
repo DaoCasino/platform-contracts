@@ -117,14 +117,16 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
     require_auth(get_owner());
     const auto ct = current_time_point();
     const auto account_balance = token::get_balance(_self, core_symbol);
+    // in case game developers screwed it up
+    const auto game_profits_sum = std::max(zero_asset, gstate.game_profits_sum);
 
-    if (account_balance > gstate.game_active_sessions_sum + gstate.game_profits_sum) {
+    if (account_balance > gstate.game_active_sessions_sum + game_profits_sum) {
         const asset max_transfer = account_balance - gstate.game_active_sessions_sum - gstate.game_profits_sum;
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
         transfer(beneficiary_account, quantity, "casino profits");
     } else {
-        check(account_balance > gstate.game_profits_sum, "developer profits exceed account balance");
-        const asset max_transfer = std::min(account_balance / 10, account_balance - gstate.game_profits_sum);
+        check(account_balance > game_profits_sum, "developer profits exceed account balance");
+        const asset max_transfer = std::min(account_balance / 10, account_balance - game_profits_sum);
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
         check(ct - gstate.last_withdraw_time > microseconds(useconds_per_week), "already claimed within past week");
         transfer(beneficiary_account, quantity, "casino profits");
