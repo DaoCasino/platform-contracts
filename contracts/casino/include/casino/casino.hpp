@@ -86,10 +86,9 @@ public:
     void session_update(name game_account, asset max_win_delta);
     [[eosio::action("sesclose")]]
     void session_close(name game_account, asset quantity);
+    // newsession is called when the game starts
     [[eosio::action("newsession")]]
     void on_new_session(name game_account);
-    [[eosio::action("closesession")]]
-    void on_session_close(name game_account);
     [[eosio::action("pausegame")]]
     void pause_game(uint64_t game_id, bool pause);
 
@@ -192,16 +191,6 @@ private:
             row.active_sessions_amount++;
         });
         gstate.active_sessions_amount++;
-    }
-
-    void on_session_close(uint64_t game_id) {
-        const auto itr = game_state.require_find(game_id, "game not found");
-        check(itr->active_sessions_amount, "no active sessions");
-        check(gstate.active_sessions_amount, "no active sesions");
-        game_state.modify(itr, _self, [&](auto& row) {
-            row.active_sessions_amount--;
-        });
-        gstate.active_sessions_amount--;
     }
 
     name get_platform() const {

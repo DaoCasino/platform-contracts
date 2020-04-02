@@ -148,11 +148,6 @@ void casino::on_new_session(name game_account) {
     on_new_session(game_id);
 }
 
-void casino::on_session_close(name game_account) {
-    require_auth(game_account);
-    on_session_close(get_game_id(game_account));
-}
-
 void casino::pause_game(uint64_t game_id, bool pause) {
     require_auth(get_self());
 
