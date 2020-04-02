@@ -159,7 +159,6 @@ private:
     }
 
     void verify_game(uint64_t game_id);
-    void verify_account(name game_account);
     uint64_t get_game_id(name game_account);
 
     void session_update(uint64_t game_id, asset quantity) {
