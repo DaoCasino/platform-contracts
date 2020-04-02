@@ -118,7 +118,7 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
     const auto game_profits_sum = std::max(zero_asset, gstate.game_profits_sum);
 
     if (account_balance > gstate.game_active_sessions_sum + game_profits_sum) {
-        const asset max_transfer = account_balance - gstate.game_active_sessions_sum - gstate.game_profits_sum;
+        const asset max_transfer = account_balance - gstate.game_active_sessions_sum - game_profits_sum;
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
         transfer(beneficiary_account, quantity, "casino profits");
     } else {
