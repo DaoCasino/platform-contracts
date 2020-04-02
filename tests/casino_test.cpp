@@ -576,6 +576,64 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
 
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(withdraw_negative_profits, casino_tester) try {
+    name game_account = N(game.boy);
+    name player_account = N(din.don);
+    name casino_beneficiary_account = N(don.din);
+
+    create_accounts({
+        game_account,
+        player_account,
+        casino_beneficiary_account
+    });
+    transfer(config::system_account_name, casino_account, STRSYM("100.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(setmargin), platform_name, mvo()
+            ("id", 0)
+            ("profit_margin", 50)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(onloss), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", STRSYM("50.0000"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        wasm_assert_msg("quantity exceededs max transfer amount"),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", STRSYM("75.0000"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", STRSYM("50.0000"))
+        )
+    );
+} FC_LOG_AND_RETHROW()
+
 BOOST_AUTO_TEST_SUITE_END()
 
 } // namespace testing
