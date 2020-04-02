@@ -174,7 +174,7 @@ BOOST_FIXTURE_TEST_CASE(send_event_inactive_game, events_tester) try {
 
     produce_blocks(2);
 
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("game isn't active"),
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("game not found"),
         push_action(events_name, N(send), game_account, mvo()
             ("sender", game_account)
             ("casino_id", 0)
@@ -198,7 +198,7 @@ BOOST_FIXTURE_TEST_CASE(send_event_inactive_game, events_tester) try {
 
     produce_blocks(2);
 
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("game isn't active"),
+    BOOST_REQUIRE_EQUAL(success(),
         push_action(events_name, N(send), game_account, mvo()
             ("sender", game_account)
             ("casino_id", 0)
@@ -227,7 +227,7 @@ BOOST_FIXTURE_TEST_CASE(send_event_inactive_casino, events_tester) try {
 
     produce_blocks(2);
 
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("casino isn't active"),
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("casino not found"),
         push_action(events_name, N(send), game_account, mvo()
             ("sender", game_account)
             ("casino_id", 0)
@@ -250,7 +250,7 @@ BOOST_FIXTURE_TEST_CASE(send_event_inactive_casino, events_tester) try {
 
     produce_blocks(2);
 
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("casino isn't active"),
+    BOOST_REQUIRE_EQUAL(success(),
         push_action(events_name, N(send), game_account, mvo()
             ("sender", game_account)
             ("casino_id", 0)
