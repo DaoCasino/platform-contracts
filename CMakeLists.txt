@@ -9,7 +9,6 @@ set(EOSIO_CDT_VERSION_MIN "1.6.3")
 set(EOSIO_CDT_VERSION_SOFT_MAX "1.6.3")
 set(DAOBET_CONTRACTS_VERSION "v1.0.7") # daobet system contracts version from git tag
 
-
 execute_process(COMMAND git describe --tags --always --dirty
     OUTPUT_VARIABLE GIT_TAG_RAW
     ERROR_QUIET
@@ -33,8 +32,6 @@ ExternalProject_Add(
     BINARY_DIR ${CMAKE_BINARY_DIR}/contracts
     CMAKE_ARGS
         -DCMAKE_TOOLCHAIN_FILE=${EOSIO_CDT_ROOT}/lib/cmake/eosio.cdt/EosioWasmToolchain.cmake
-        -DCONTRACT_VERSION=${VERSION_FULL}
-    UPDATE_COMMAND ""
     PATCH_COMMAND ""
     TEST_COMMAND ""
     INSTALL_COMMAND ""

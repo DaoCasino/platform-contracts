@@ -1,0 +1,8 @@
+#pragma once
+
+#include <string>
+#include <eosio/eosio.hpp>
+
+namespace casino {
+    static const std::string CONTRACT_VERSION = "${CONTRACT_VERSION}";
+} // namespace casino

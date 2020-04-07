@@ -70,7 +70,6 @@ log "  # of CPUs   = $ncores"
 #log "  cmake executable  = ${CMAKE_CMD:-"<not found>"}"
 
 ###
-
 cmake_flags=(
   -D CMAKE_BUILD_TYPE="$build_type"
   -D CMAKE_MODULE_PATH="$node_root/lib/cmake/$project"

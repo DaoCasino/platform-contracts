@@ -30,9 +30,6 @@ public:
         vector<char> data = get_row_by_account(platform_name, platform_name, N(game), game_id );
         return data.empty() ? fc::variant() : abi_ser[platform_name].binary_to_variant("game_row", data, abi_serializer_max_time);
     }
-
-public:
-    abi_serializer plarform_abi_ser;
 };
 
 const account_name platform_tester::platform_name = N(platform);
@@ -57,6 +54,24 @@ BOOST_FIXTURE_TEST_CASE(add_casino, platform_tester) try {
     BOOST_REQUIRE_EQUAL(casino["contract"].as<account_name>(), casino_account);
     BOOST_REQUIRE_EQUAL(casino["meta"].as<bytes>().size(), 0);
     BOOST_REQUIRE_EQUAL(casino["paused"].as<bool>(), false);
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(vesion_test, platform_tester) try {
+    account_name casino_account = N(casino.1);
+
+    create_account(casino_account);
+
+    base_tester::push_action(platform_name, N(addcas), platform_name, mvo()
+        ("contract", casino_account)
+        ("meta", bytes())
+    );
+
+    vector<char> data = get_row_by_account(platform_name, platform_name, N(version), N(version) );
+    BOOST_REQUIRE_EQUAL(data.empty(), false);
+
+    auto version = abi_ser[platform_name].binary_to_variant("version_row", data, abi_serializer_max_time);
+    BOOST_REQUIRE_EQUAL(version["version"], contracts::version());
 
 } FC_LOG_AND_RETHROW()
 

@@ -1,6 +1,25 @@
 #include <platform/platform.hpp>
+#include <platform/version.hpp>
 
 namespace platform {
+
+platform::platform(name receiver, name code, eosio::datastream<const char*> ds):
+    contract(receiver, code, ds),
+    version(_self, _self.value),
+    global(_self, _self.value),
+    casinos(_self, _self.value),
+    games(_self, _self.value)
+{
+    version.set(version_row {CONTRACT_VERSION}, _self);
+}
+
+void platform::set_rsa_pubkey(const std::string& rsa_pubkey) {
+    require_auth(get_self());
+
+    auto gs = global.get_or_default();
+    gs.rsa_pubkey = rsa_pubkey;
+    global.set(gs, get_self());
+}
 
 void platform::add_casino(name contract, bytes meta) {
     require_auth(get_self());
@@ -48,6 +67,15 @@ void platform::set_meta_casino(uint64_t id, bytes meta) {
     const auto casino_itr = casinos.require_find(id, "casino not found");
     casinos.modify(casino_itr, get_self(), [&](auto& row) {
         row.meta = meta;
+    });
+}
+
+void platform::set_rsa_pubkey_casino(uint64_t id, const std::string& rsa_pubkey) {
+    require_auth(get_self());
+
+    const auto casino_itr = casinos.require_find(id, "casino not found");
+    casinos.modify(casino_itr, get_self(), [&](auto& row) {
+        row.rsa_pubkey = rsa_pubkey;
     });
 }
 
@@ -99,6 +127,24 @@ void platform::set_meta_game(uint64_t id, bytes meta) {
     const auto game_itr = games.require_find(id, "game not found");
     games.modify(game_itr, get_self(), [&](auto& row) {
         row.meta = meta;
+    });
+}
+
+void platform::set_profit_margin_game(uint64_t id, uint32_t profit_margin) {
+    require_auth(get_self());
+
+    const auto game_itr = games.require_find(id, "game not found");
+    games.modify(game_itr, get_self(), [&](auto& row) {
+        row.profit_margin = profit_margin;
+    });
+}
+
+void platform::set_beneficiary_game(uint64_t id, name beneficiary) {
+    require_auth(get_self());
+
+    const auto game_itr = games.require_find(id, "game not found");
+    games.modify(game_itr, get_self(), [&](auto& row) {
+        row.beneficiary = beneficiary;
     });
 }
 
