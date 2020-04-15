@@ -15,7 +15,7 @@ using eosio::microseconds;
 using eosio::check;
 using eosio::symbol;
 
-using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
+using game_params_type = std::vector<std::pair<uint16_t, uint64_t>>;
 
 struct [[eosio::table("game"), eosio::contract("casino")]] game_row {
     uint64_t game_id;
