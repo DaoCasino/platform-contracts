@@ -51,6 +51,11 @@ public:
        vector<char> data = get_row_by_account(casino_account, casino_account, N(global), N(global) );
        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("global_state", data, abi_serializer_max_time);
    }
+
+   fc::variant get_bonus() {
+       vector<char> data = get_row_by_account(casino_account, casino_account, N(bonus), N(bonus) );
+       return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("bonus_state", data, abi_serializer_max_time);
+   }
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
@@ -632,6 +637,40 @@ BOOST_FIXTURE_TEST_CASE(withdraw_negative_profits, casino_tester) try {
             ("quantity", STRSYM("50.0000"))
         )
     );
+} FC_LOG_AND_RETHROW()
+
+// bonus
+
+BOOST_FIXTURE_TEST_CASE(bonus, casino_tester) try {
+    name bonus_admin = N(admin.bon);
+    name bonus_hunter = N(hunter.bon);
+
+    create_accounts({bonus_admin, bonus_hunter});
+    transfer(config::system_account_name, casino_account, STRSYM("100.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(setadminbon), casino_account, mvo()
+            ("new_admin", bonus_admin)
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_bonus()["admin"].as<name>(), bonus_admin);
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(depositbon), bonus_admin, mvo()
+            ("quantity", STRSYM("10.0000"))
+            ("memo", "")
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("10.0000"));
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdrawbon), bonus_admin, mvo()
+            ("to", bonus_hunter)
+            ("quantity", STRSYM("3.0000"))
+            ("memo", "")
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("97.0000"));
+    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("7.0000"));
+    BOOST_REQUIRE_EQUAL(get_balance(bonus_hunter), STRSYM("3.0000"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

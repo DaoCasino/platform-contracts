@@ -10,22 +10,24 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     version(_self, _self.value),
     games(_self, _self.value),
     game_state(_self, _self.value),
-    _gstate(_self, _self.value)
-{
+    _gstate(_self, _self.value),
+    _bstate(_self, _self.value) {
+
     version.set(version_row {CONTRACT_VERSION}, _self);
 
-    if (!_gstate.exists()) {
-        // on contract first call
-        _gstate.set(global_state{
-            zero_asset,
-            zero_asset,
-            0,
-            current_time_point(),
-            name(),
-            _self
-        }, _self);
-    }
-    gstate = _gstate.get();
+    gstate = _gstate.get_or_create(_self, global_state{
+                zero_asset,
+                zero_asset,
+                0,
+                current_time_point(),
+                name(),
+                _self
+            });
+
+    bstate = _bstate.get_or_create(_self, bonus_state{
+            _self,
+            zero_asset
+        });
 }
 
 void casino::set_platform(name platform_name) {
@@ -161,6 +163,27 @@ void casino::pause_game(uint64_t game_id, bool pause) {
 
 uint32_t casino::get_profit_margin(uint64_t game_id) const {
     return platform::read::get_game(get_platform(), game_id).profit_margin;
+}
+
+void casino::set_bonus_admin(name new_admin) {
+    require_auth(get_owner());
+    check(is_account(new_admin), "new bonus admin account does not exist");
+    bstate.admin = new_admin;
+}
+
+void casino::deposit_bonus(asset quantity, const std::string& memo) {
+    require_auth(bstate.admin);
+    check(memo.size() <= 256, "memo has more than 256 bytes");
+    bstate.total_allocated += quantity;
+    check(bstate.total_allocated <= token::get_balance(get_self(), core_symbol), "total bonus cannot exceed casino balance");
+}
+
+void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {
+    require_auth(bstate.admin);
+    check(memo.size() <= 256, "memo has more than 256 bytes");
+    check(quantity <= bstate.total_allocated, "withdraw quantity cannot exceed total bonus");
+    transfer(to, quantity, memo);
+    bstate.total_allocated -= quantity;
 }
 
 } // namespace casino

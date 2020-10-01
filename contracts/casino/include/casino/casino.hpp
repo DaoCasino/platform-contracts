@@ -3,6 +3,7 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 #include <eosio/asset.hpp>
+#include <eosio/binary_extension.hpp>
 #include <platform/platform.hpp>
 
 namespace casino {
@@ -50,11 +51,17 @@ struct [[eosio::table("global"), eosio::contract("casino")]] global_state {
     uint64_t active_sessions_amount; // amount of active sessions
     time_point last_withdraw_time; // casino last withdraw time
     name platform; // platfrom account name
-    name owner; // owner has the rights to withdraw and update the contract state
+    name owner; // owner has permission to withdraw and update the contract state
 };
 
 using global_state_singleton = eosio::singleton<"global"_n, global_state>;
 
+struct [[eosio::table("bonus"), eosio::contract("casino")]] bonus_state {
+    name admin; // bonus admin has permission to deposit and withdraw
+    asset total_allocated; // quantity allocated for bonus
+};
+
+using bonus_state_singleton = eosio::singleton<"bonus"_n, bonus_state>;
 
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
@@ -64,8 +71,11 @@ public:
 
     ~casino() {
         _gstate.set(gstate, _self);
+        _bstate.set(bstate, _self);
     }
 
+    // =================
+    // general methods
     [[eosio::action("setplatform")]]
     void set_platform(name platform_name);
     [[eosio::action("addgame")]]
@@ -92,6 +102,19 @@ public:
     [[eosio::action("pausegame")]]
     void pause_game(uint64_t game_id, bool pause);
 
+    // =========================
+    // bonus related methods
+    [[eosio::action("setadminbon")]]
+    void set_bonus_admin(name new_admin);
+
+    [[eosio::action("depositbon")]]
+    void deposit_bonus(asset quantity, const std::string& memo);
+
+    [[eosio::action("withdrawbon")]]
+    void withdraw_bonus(name to, asset quantity, const std::string& memo);
+
+    // ==========================
+    // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
     static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
@@ -103,8 +126,12 @@ private:
     version_singleton version;
     game_table games;
     game_state_table game_state;
+
     global_state_singleton _gstate;
     global_state gstate;
+
+    bonus_state bstate;
+    bonus_state_singleton _bstate;
 
     name get_owner() const {
         return gstate.owner;
@@ -196,7 +223,7 @@ private:
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
     }
-}; // casino contract
+};
 
 const asset casino::zero_asset = asset(0, casino::core_symbol);
 
