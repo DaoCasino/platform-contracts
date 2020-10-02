@@ -56,6 +56,11 @@ public:
        vector<char> data = get_row_by_account(casino_account, casino_account, N(bonus), N(bonus) );
        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("bonus_state", data, abi_serializer_max_time);
    }
+
+    uint64_t get_bonus_balance(name player) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(bonusbalance), player.value);
+        return data.empty() ? 0 : abi_ser[casino_account].binary_to_variant("bonus_balance_row", data, abi_serializer_max_time)["balance"].as<uint64_t>();
+    }
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
@@ -644,9 +649,10 @@ BOOST_FIXTURE_TEST_CASE(withdraw_negative_profits, casino_tester) try {
 BOOST_FIXTURE_TEST_CASE(bonus, casino_tester) try {
     name bonus_admin = N(admin.bon);
     name bonus_hunter = N(hunter.bon);
+    name player = N(player);
 
-    create_accounts({bonus_admin, bonus_hunter});
-    transfer(config::system_account_name, casino_account, STRSYM("100.0000"));
+    create_accounts({bonus_admin, bonus_hunter, player});
+    transfer(config::system_account_name, casino_account, STRSYM("1000.0000"));
 
     BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(setadminbon), casino_account, mvo()
@@ -656,11 +662,11 @@ BOOST_FIXTURE_TEST_CASE(bonus, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_bonus()["admin"].as<name>(), bonus_admin);
     BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(depositbon), bonus_admin, mvo()
-            ("quantity", STRSYM("10.0000"))
+            ("quantity", STRSYM("100.0000"))
             ("memo", "")
         )
     );
-    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("10.0000"));
+    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("100.0000"));
     BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(withdrawbon), bonus_admin, mvo()
             ("to", bonus_hunter)
@@ -668,10 +674,53 @@ BOOST_FIXTURE_TEST_CASE(bonus, casino_tester) try {
             ("memo", "")
         )
     );
-    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("97.0000"));
-    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("7.0000"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("997.0000"));
+    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("97.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(bonus_hunter), STRSYM("3.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sendbon), bonus_admin, mvo()
+            ("to", player)
+            ("amount", 100)
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player), 100);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(subtractbon), bonus_admin, mvo()
+            ("from", player)
+            ("amount", 50)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player), 50);
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("convert amount cannot exceed player's bonus balance"),
+        push_action(casino_account, N(convertbon), bonus_admin, mvo()
+            ("account", player)
+            ("amount", 100)
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("97.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(convertbon), bonus_admin, mvo()
+            ("account", player)
+            ("amount", 50)
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_balance(player), STRSYM("50.0000"));
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player), 0);
+    BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("47.0000"));
 } FC_LOG_AND_RETHROW()
+
+
 
 BOOST_AUTO_TEST_SUITE_END()
 

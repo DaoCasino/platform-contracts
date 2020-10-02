@@ -11,7 +11,8 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     games(_self, _self.value),
     game_state(_self, _self.value),
     _gstate(_self, _self.value),
-    _bstate(_self, _self.value) {
+    _bstate(_self, _self.value),
+    bonus_balance(_self, _self.value) {
 
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -182,8 +183,46 @@ void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {
     require_auth(bstate.admin);
     check(memo.size() <= 256, "memo has more than 256 bytes");
     check(quantity <= bstate.total_allocated, "withdraw quantity cannot exceed total bonus");
-    transfer(to, quantity, memo);
     bstate.total_allocated -= quantity;
+    transfer(to, quantity, memo);
+}
+
+void casino::send_bonus(name to, uint64_t amount) {
+    require_auth(bstate.admin);
+    const auto itr = bonus_balance.find(to.value);
+    if (itr == bonus_balance.end()) {
+        bonus_balance.emplace(_self, [&](auto& row) {
+            row.player = to;
+            row.balance = amount;
+        });
+    } else {
+        bonus_balance.modify(itr, _self, [&](auto& row) {
+            row.balance += amount;
+        });
+    }
+}
+
+void casino::subtract_bonus(name from, uint64_t amount) {
+    require_auth(bstate.admin);
+    const auto itr = bonus_balance.require_find(from.value, "player has no bonus");
+    check(amount <= itr->balance, "subtract amount cannot exceed player's bonus balance");
+    bonus_balance.modify(itr, _self, [&](auto& row) {
+        row.balance -= amount;
+    });
+}
+
+void casino::convert_bonus(name account, uint64_t amount, const std::string& memo) {
+    require_auth(bstate.admin);
+    check(memo.size() <= 256, "memo has more than 256 bytes");
+    const auto row = bonus_balance.require_find(account.value, "player has no bonus");
+    check(amount <= row->balance, "convert amount cannot exceed player's bonus balance");
+    const auto quantity = convert_bonus_to_bet(amount);
+    check(quantity <= bstate.total_allocated, "convert quantity cannot exceed total allocated");
+    bstate.total_allocated -= quantity;
+    bonus_balance.modify(row, _self, [&](auto& row) {
+        row.balance -= amount;
+    });
+    transfer(account, quantity, memo);
 }
 
 } // namespace casino

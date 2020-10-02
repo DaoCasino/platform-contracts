@@ -63,6 +63,15 @@ struct [[eosio::table("bonus"), eosio::contract("casino")]] bonus_state {
 
 using bonus_state_singleton = eosio::singleton<"bonus"_n, bonus_state>;
 
+struct [[eosio::table("bonusbalance"), eosio::contract("casino")]] bonus_balance_row {
+    name player;
+    uint64_t balance;
+
+    uint64_t primary_key() const { return player.value; }
+};
+
+using bonus_balance_table = eosio::multi_index<"bonusbalance"_n, bonus_balance_row>;
+
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -113,6 +122,14 @@ public:
     [[eosio::action("withdrawbon")]]
     void withdraw_bonus(name to, asset quantity, const std::string& memo);
 
+    [[eosio::action("sendbon")]]
+    void send_bonus(name to, uint64_t amount);
+
+    [[eosio::action("subtractbon")]]
+    void subtract_bonus(name from, uint64_t amount);
+
+    [[eosio::action("convertbon")]]
+    void convert_bonus(name account, uint64_t amount, const std::string& memo);
     // ==========================
     // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
@@ -132,6 +149,8 @@ private:
 
     bonus_state bstate;
     bonus_state_singleton _bstate;
+
+    bonus_balance_table bonus_balance;
 
     name get_owner() const {
         return gstate.owner;
@@ -222,6 +241,10 @@ private:
     name get_platform() const {
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
+    }
+
+    asset convert_bonus_to_bet(uint64_t amount) const {
+        return asset(amount * 1'0000, core_symbol);
     }
 };
 
