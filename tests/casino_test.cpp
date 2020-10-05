@@ -720,7 +720,74 @@ BOOST_FIXTURE_TEST_CASE(bonus, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("47.0000"));
 } FC_LOG_AND_RETHROW()
 
+BOOST_FIXTURE_TEST_CASE(ses_bonus_lock_add, casino_tester) try {
+    name game_account = N(game.boy);
+    name player_account = N(player.acc);
+    create_accounts({
+        game_account,
+        player_account
+    });
+    transfer(config::system_account_name, game_account, STRSYM("3.0000"));
+    transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
 
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("player has no bonus"),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("account", player_account)
+            ("amount", 100)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(depositbon), casino_account, mvo()
+            ("quantity", STRSYM("100.0000"))
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sendbon), casino_account, mvo()
+            ("to", player_account)
+            ("amount", 100)
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), 100);
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("account", player_account)
+            ("amount", 100)
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), 0);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesaddbon), game_account, mvo()
+            ("game_account", game_account)
+            ("account", player_account)
+            ("amount", 200)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), 200);
+} FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
 

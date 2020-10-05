@@ -225,4 +225,23 @@ void casino::convert_bonus(name account, uint64_t amount, const std::string& mem
     transfer(account, quantity, memo);
 }
 
+void casino::session_lock_bonus(name game_account, name account, uint64_t amount) {
+    require_auth(game_account);
+    verify_game(get_game_id(game_account));
+    const auto row = bonus_balance.require_find(account.value, "player has no bonus");
+    check(amount <= row->balance, "lock amount cannot exceed player's bonus balance");
+    bonus_balance.modify(row, _self, [&](auto& row) {
+        row.balance -= amount;
+    });
+}
+
+void casino::session_add_bonus(name game_account, name account, uint64_t amount) {
+    require_auth(game_account);
+    verify_game(get_game_id(game_account));
+    const auto row = bonus_balance.require_find(account.value, "player has no bonus");
+    bonus_balance.modify(row, _self, [&](auto& row) {
+        row.balance += amount;
+    });
+}
+
 } // namespace casino
