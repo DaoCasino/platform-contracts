@@ -17,18 +17,18 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     version.set(version_row {CONTRACT_VERSION}, _self);
 
     gstate = _gstate.get_or_create(_self, global_state{
-                zero_asset,
-                zero_asset,
-                0,
-                current_time_point(),
-                name(),
-                _self
-            });
+        zero_asset,
+        zero_asset,
+        0,
+        current_time_point(),
+        name(),
+        _self
+    });
 
-    bstate = _bstate.get_or_create(_self, bonus_state{
-            _self,
-            zero_asset
-        });
+    bstate = _bstate.get_or_create(_self, bonus_pool_state{
+        _self,
+        zero_asset
+    });
 }
 
 void casino::set_platform(name platform_name) {
@@ -116,7 +116,7 @@ void casino::verify_game(uint64_t game_id) {
 void casino::withdraw(name beneficiary_account, asset quantity) {
     require_auth(get_owner());
     const auto ct = current_time_point();
-    const auto account_balance = token::get_balance(_self, core_symbol);
+    const auto account_balance = token::get_balance(_self, core_symbol) - bstate.total_allocated;
     // in case game developers screwed it up
     const auto game_profits_sum = std::max(zero_asset, gstate.game_profits_sum);
 
@@ -173,36 +173,26 @@ void casino::set_bonus_admin(name new_admin) {
 }
 
 void casino::deposit_bonus(asset quantity, const std::string& memo) {
-    require_auth(bstate.admin);
+    require_auth(get_owner());
     check(memo.size() <= 256, "memo has more than 256 bytes");
     bstate.total_allocated += quantity;
     check(bstate.total_allocated <= token::get_balance(get_self(), core_symbol), "total bonus cannot exceed casino balance");
 }
 
 void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {
-    require_auth(bstate.admin);
+    require_auth(get_owner());
     check(memo.size() <= 256, "memo has more than 256 bytes");
     check(quantity <= bstate.total_allocated, "withdraw quantity cannot exceed total bonus");
     bstate.total_allocated -= quantity;
     transfer(to, quantity, memo);
 }
 
-void casino::send_bonus(name to, uint64_t amount) {
+void casino::send_bonus(name to, asset amount) {
     require_auth(bstate.admin);
-    const auto itr = bonus_balance.find(to.value);
-    if (itr == bonus_balance.end()) {
-        bonus_balance.emplace(_self, [&](auto& row) {
-            row.player = to;
-            row.balance = amount;
-        });
-    } else {
-        bonus_balance.modify(itr, _self, [&](auto& row) {
-            row.balance += amount;
-        });
-    }
+    create_or_update_bonus_balance(to, amount);
 }
 
-void casino::subtract_bonus(name from, uint64_t amount) {
+void casino::subtract_bonus(name from, asset amount) {
     require_auth(bstate.admin);
     const auto itr = bonus_balance.require_find(from.value, "player has no bonus");
     check(amount <= itr->balance, "subtract amount cannot exceed player's bonus balance");
@@ -211,21 +201,17 @@ void casino::subtract_bonus(name from, uint64_t amount) {
     });
 }
 
-void casino::convert_bonus(name account, uint64_t amount, const std::string& memo) {
+void casino::convert_bonus(name account, const std::string& memo) {
     require_auth(bstate.admin);
     check(memo.size() <= 256, "memo has more than 256 bytes");
     const auto row = bonus_balance.require_find(account.value, "player has no bonus");
-    check(amount <= row->balance, "convert amount cannot exceed player's bonus balance");
-    const auto quantity = convert_bonus_to_bet(amount);
-    check(quantity <= bstate.total_allocated, "convert quantity cannot exceed total allocated");
-    bstate.total_allocated -= quantity;
-    bonus_balance.modify(row, _self, [&](auto& row) {
-        row.balance -= amount;
-    });
-    transfer(account, quantity, memo);
+    check(row->balance <= bstate.total_allocated, "convert quantity cannot exceed total allocated");
+    bstate.total_allocated -= row->balance;
+    transfer(account, row->balance, memo);
+    bonus_balance.erase(row);
 }
 
-void casino::session_lock_bonus(name game_account, name account, uint64_t amount) {
+void casino::session_lock_bonus(name game_account, name account, asset amount) {
     require_auth(game_account);
     verify_game(get_game_id(game_account));
     const auto row = bonus_balance.require_find(account.value, "player has no bonus");
@@ -233,15 +219,16 @@ void casino::session_lock_bonus(name game_account, name account, uint64_t amount
     bonus_balance.modify(row, _self, [&](auto& row) {
         row.balance -= amount;
     });
+    if (row->balance == zero_asset) {
+        bonus_balance.erase(row);
+    }
 }
 
-void casino::session_add_bonus(name game_account, name account, uint64_t amount) {
+void casino::session_add_bonus(name game_account, name account, asset amount) {
     require_auth(game_account);
     verify_game(get_game_id(game_account));
-    const auto row = bonus_balance.require_find(account.value, "player has no bonus");
-    bonus_balance.modify(row, _self, [&](auto& row) {
-        row.balance += amount;
-    });
+    const auto row = bonus_balance.find(account.value);
+    create_or_update_bonus_balance(account, amount);
 }
 
 } // namespace casino

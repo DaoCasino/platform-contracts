@@ -56,16 +56,16 @@ struct [[eosio::table("global"), eosio::contract("casino")]] global_state {
 
 using global_state_singleton = eosio::singleton<"global"_n, global_state>;
 
-struct [[eosio::table("bonus"), eosio::contract("casino")]] bonus_state {
-    name admin; // bonus admin has permission to deposit and withdraw
-    asset total_allocated; // quantity allocated for bonus
+struct [[eosio::table("bonuspool"), eosio::contract("casino")]] bonus_pool_state {
+    name admin; // bonus pool admin has permissions to deposit and withdraw
+    asset total_allocated; // quantity allocated for bonus pool
 };
 
-using bonus_state_singleton = eosio::singleton<"bonus"_n, bonus_state>;
+using bonus_pool_state_singleton = eosio::singleton<"bonuspool"_n, bonus_pool_state>;
 
 struct [[eosio::table("bonusbalance"), eosio::contract("casino")]] bonus_balance_row {
     name player;
-    uint64_t balance;
+    asset balance;
 
     uint64_t primary_key() const { return player.value; }
 };
@@ -123,20 +123,20 @@ public:
     void withdraw_bonus(name to, asset quantity, const std::string& memo);
 
     [[eosio::action("sendbon")]]
-    void send_bonus(name to, uint64_t amount);
+    void send_bonus(name to, asset amount);
 
     [[eosio::action("subtractbon")]]
-    void subtract_bonus(name from, uint64_t amount);
+    void subtract_bonus(name from, asset amount);
 
     [[eosio::action("convertbon")]]
-    void convert_bonus(name account, uint64_t amount, const std::string& memo);
+    void convert_bonus(name account, const std::string& memo);
 
     // session
     [[eosio::action("seslockbon")]]
-    void session_lock_bonus(name game_account, name account, uint64_t amount); // locks player's bonus for current session
+    void session_lock_bonus(name game_account, name account, asset amount); // locks player's bonus for current session
 
     [[eosio::action("sesaddbon")]]
-    void session_add_bonus(name game_account, name account, uint64_t amount); // adds player bonus if he wins
+    void session_add_bonus(name game_account, name account, asset amount); // adds player bonus if he wins
     // ==========================
     // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
@@ -154,8 +154,8 @@ private:
     global_state_singleton _gstate;
     global_state gstate;
 
-    bonus_state bstate;
-    bonus_state_singleton _bstate;
+    bonus_pool_state bstate;
+    bonus_pool_state_singleton _bstate;
 
     bonus_balance_table bonus_balance;
 
@@ -250,8 +250,18 @@ private:
         return gstate.platform;
     }
 
-    asset convert_bonus_to_bet(uint64_t amount) const {
-        return asset(amount * 1'0000, core_symbol);
+    void create_or_update_bonus_balance(name player, asset amount) {
+        const auto itr = bonus_balance.find(player.value);
+        if (itr == bonus_balance.end()) {
+            bonus_balance.emplace(_self, [&](auto& row) {
+                row.player = player;
+                row.balance = amount;
+            });
+        } else {
+            bonus_balance.modify(itr, _self, [&](auto& row) {
+                row.balance += amount;
+            });
+        }
     }
 };
 
