@@ -12,7 +12,8 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     game_state(_self, _self.value),
     _gstate(_self, _self.value),
     _bstate(_self, _self.value),
-    bonus_balance(_self, _self.value) {
+    bonus_balance(_self, _self.value),
+    player_stats(_self, _self.value) {
 
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -89,6 +90,12 @@ void casino::on_loss(name game_account, name player_account, eosio::asset quanti
     const auto game_id = get_game_id(game_account);
     transfer(player_account, quantity, "player winnings");
     sub_balance(game_id, quantity * get_profit_margin(game_id) / percent_100);
+
+    // casino loses - player wins 'BET's
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.profit_real += quantity;
+    });
 }
 
 void casino::claim_profit(name game_account) {
@@ -144,11 +151,37 @@ void casino::session_close(name game_account, asset quantity) {
     session_close(get_game_id(game_account), quantity);
 }
 
-void casino::on_new_session(name game_account) {
+void casino::on_new_session(name game_account, name player_account) {
     require_auth(game_account);
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
-    on_new_session(game_id);
+
+    // game state
+    const auto itr = game_state.require_find(game_id, "game not found");
+    game_state.modify(itr, _self, [&](auto& row) {
+        row.active_sessions_amount++;
+    });
+
+    // global state
+    gstate.active_sessions_amount++;
+
+    // player stats
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.sessions_created++;
+    });
+}
+
+void casino::on_new_deposit(name game_account, name player_account, asset quantity) {
+    require_auth(game_account);
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.volume_real += quantity;
+        row.profit_real -= quantity;
+    });
 }
 
 void casino::pause_game(uint64_t game_id, bool pause) {
@@ -211,10 +244,10 @@ void casino::convert_bonus(name account, const std::string& memo) {
     bonus_balance.erase(row);
 }
 
-void casino::session_lock_bonus(name game_account, name account, asset amount) {
+void casino::session_lock_bonus(name game_account, name player_account, asset amount) {
     require_auth(game_account);
     verify_game(get_game_id(game_account));
-    const auto row = bonus_balance.require_find(account.value, "player has no bonus");
+    const auto row = bonus_balance.require_find(player_account.value, "player has no bonus");
     check(amount <= row->balance, "lock amount cannot exceed player's bonus balance");
     bonus_balance.modify(row, _self, [&](auto& row) {
         row.balance -= amount;
@@ -222,6 +255,14 @@ void casino::session_lock_bonus(name game_account, name account, asset amount) {
     if (row->balance == zero_asset) {
         bonus_balance.erase(row);
     }
+
+    // when player makes a bet using bonuses (volume increases)
+    // his tokens are locked (assume he loses)
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.volume_bonus += amount;
+        row.profit_bonus -= amount;
+    });
 }
 
 void casino::session_add_bonus(name game_account, name account, asset amount) {
@@ -229,6 +270,11 @@ void casino::session_add_bonus(name game_account, name account, asset amount) {
     verify_game(get_game_id(game_account));
     const auto row = bonus_balance.find(account.value);
     create_or_update_bonus_balance(account, amount);
+
+    const auto player_stat = get_or_create_player_stat(account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.profit_bonus += amount;
+    });
 }
 
 } // namespace casino

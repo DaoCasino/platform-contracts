@@ -72,6 +72,21 @@ struct [[eosio::table("bonusbalance"), eosio::contract("casino")]] bonus_balance
 
 using bonus_balance_table = eosio::multi_index<"bonusbalance"_n, bonus_balance_row>;
 
+struct [[eosio::table("playerstats"), eosio::contract("casino")]] player_stats_row {
+    name player;
+    uint64_t sessions_created;
+
+    asset volume_real; // volume bet using 'BET'
+    asset volume_bonus; // volume bet using bonus
+
+    asset profit_real; // profit in 'BET'
+    asset profit_bonus; // profit in bonus
+
+    uint64_t primary_key() const { return player.value; }
+};
+
+using player_stats_table = eosio::multi_index<"playerstats"_n, player_stats_row>;
+
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -107,7 +122,9 @@ public:
     void session_close(name game_account, asset quantity);
     // newsession is called when the game starts
     [[eosio::action("newsession")]]
-    void on_new_session(name game_account);
+    void on_new_session(name game_account, name player_account);
+    [[eosio::action("newdeposit")]]
+    void on_new_deposit(name game_account, name player_account, asset quantity);
     [[eosio::action("pausegame")]]
     void pause_game(uint64_t game_id, bool pause);
 
@@ -133,7 +150,7 @@ public:
 
     // session
     [[eosio::action("seslockbon")]]
-    void session_lock_bonus(name game_account, name account, asset amount); // locks player's bonus for current session
+    void session_lock_bonus(name game_account, name player_account, asset amount); // locks player's bonus for current session
 
     [[eosio::action("sesaddbon")]]
     void session_add_bonus(name game_account, name account, asset amount); // adds player bonus if he wins
@@ -158,6 +175,8 @@ private:
     bonus_pool_state_singleton _bstate;
 
     bonus_balance_table bonus_balance;
+
+    player_stats_table player_stats;
 
     name get_owner() const {
         return gstate.owner;
@@ -237,12 +256,21 @@ private:
         gstate.active_sessions_amount--;
     }
 
-    void on_new_session(uint64_t game_id) {
-        const auto itr = game_state.require_find(game_id, "game not found");
-        game_state.modify(itr, _self, [&](auto& row) {
-            row.active_sessions_amount++;
-        });
-        gstate.active_sessions_amount++;
+    player_stats_table::const_iterator get_or_create_player_stat(name player_account) {
+        const auto itr = player_stats.find(player_account.value);
+        if (itr == player_stats.end()) {
+            return player_stats.emplace(_self, [&](auto& row) {
+                row = player_stats_row{
+                    player_account,
+                    0,
+                    zero_asset,
+                    zero_asset,
+                    zero_asset,
+                    zero_asset
+                };
+            });
+        }
+        return itr;
     }
 
     name get_platform() const {

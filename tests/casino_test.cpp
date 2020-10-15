@@ -61,6 +61,11 @@ public:
         vector<char> data = get_row_by_account(casino_account, casino_account, N(bonusbalance), player.value);
         return data.empty() ? asset(0, symbol{CORE_SYM}) : abi_ser[casino_account].binary_to_variant("bonus_balance_row", data, abi_serializer_max_time)["balance"].as<asset>();
     }
+
+    fc::variant get_player_stats(name player) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(playerstats), player);
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("player_stats_row", data, abi_serializer_max_time);
+    }
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
@@ -129,6 +134,7 @@ BOOST_FIXTURE_TEST_CASE(remove_game, casino_tester) try {
 
 
 BOOST_FIXTURE_TEST_CASE(remove_game_active_session_failure, casino_tester) try {
+    name player_account = N(game.boy);
     BOOST_REQUIRE_EQUAL(success(),
         push_action(platform_name, N(addgame), platform_name, mvo()
             ("contract", casino_account)
@@ -147,6 +153,7 @@ BOOST_FIXTURE_TEST_CASE(remove_game_active_session_failure, casino_tester) try {
     BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(newsession), casino_account, mvo()
             ("game_account", casino_account)
+            ("player_account", player_account)
         )
     );
 
@@ -156,7 +163,6 @@ BOOST_FIXTURE_TEST_CASE(remove_game_active_session_failure, casino_tester) try {
             ("game_id", 0)
         )
     );
-
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(remove_game_not_added_failure, casino_tester) try {
@@ -468,11 +474,13 @@ BOOST_FIXTURE_TEST_CASE(claim_profit, casino_tester) try {
 
 BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
     name game_account = N(game.boy);
+    name player_account = N(player.acc);
     name game_beneficiary_account = N(din.don);
     name casino_beneficiary_account = N(don.din);
 
     create_accounts({
         game_account,
+        player_account,
         game_beneficiary_account,
         casino_beneficiary_account
     });
@@ -536,6 +544,7 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
     BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(newsession), game_account, mvo()
             ("game_account", game_account)
+            ("player_account", player_account)
         )
     );
 
@@ -738,7 +747,7 @@ BOOST_FIXTURE_TEST_CASE(ses_bonus_lock_add, casino_tester) try {
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("player has no bonus"),
         push_action(casino_account, N(seslockbon), game_account, mvo()
             ("game_account", game_account)
-            ("account", player_account)
+            ("player_account", player_account)
             ("amount", STRSYM("100.0000"))
         )
     );
@@ -762,7 +771,7 @@ BOOST_FIXTURE_TEST_CASE(ses_bonus_lock_add, casino_tester) try {
     BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(seslockbon), game_account, mvo()
             ("game_account", game_account)
-            ("account", player_account)
+            ("player_account", player_account)
             ("amount", STRSYM("100.0000"))
         )
     );
@@ -821,6 +830,62 @@ BOOST_FIXTURE_TEST_CASE(pool_withdraw, casino_tester) try {
     );
     BOOST_REQUIRE_EQUAL(get_balance(beneficiary), STRSYM("200.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(bonus_acc), STRSYM("100.0000"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
+    name game_account = N(game.acc);
+    name player_account = N(game.boy);
+    create_accounts({game_account, player_account});
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newsession), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["sessions_created"].as<int>(), 1);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newdeposit), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", STRSYM("10.0000"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["profit_real"].as<asset>(), STRSYM("-10.0000"));
+    BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["volume_real"].as<asset>(), STRSYM("10.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sendbon), casino_account, mvo()
+            ("to", player_account)
+            ("amount", STRSYM("200.0000"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", STRSYM("100.0000"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["profit_bonus"].as<asset>(), STRSYM("-100.0000"));
+    BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["volume_bonus"].as<asset>(), STRSYM("100.0000"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

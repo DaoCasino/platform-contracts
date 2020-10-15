@@ -13,7 +13,7 @@ execute_process(COMMAND git describe --tags --always --dirty
     OUTPUT_VARIABLE GIT_TAG_RAW
     ERROR_QUIET
 )
-string(STRIP ${GIT_TAG_RAW} VERSION_FULL)
+string(STRIP "${GIT_TAG_RAW}" VERSION_FULL)
 
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
