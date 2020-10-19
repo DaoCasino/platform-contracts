@@ -84,6 +84,8 @@ public:
     void withdraw(name beneficiary_account, asset quantity);
     [[eosio::action("sesupdate")]]
     void session_update(name game_account, asset max_win_delta);
+    [[eosio::action("sesnewdepo")]]
+    void session_new_deposit(name game_account, asset quantity); // stub for monitoring deposits
     [[eosio::action("sesclose")]]
     void session_close(name game_account, asset quantity);
     // newsession is called when the game starts
