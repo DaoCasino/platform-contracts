@@ -75,6 +75,10 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
     if (game_account == get_self() || casino_account != get_self()) {
         return;
     }
+    if (memo == "bonus") {
+        bstate.total_allocated += quantity;
+        return;
+    }
     platform::game_table platform_games(get_platform(), get_platform().value);
     auto games_idx = platform_games.get_index<"address"_n>();
 
@@ -203,13 +207,6 @@ void casino::set_bonus_admin(name new_admin) {
     require_auth(get_owner());
     check(is_account(new_admin), "new bonus admin account does not exist");
     bstate.admin = new_admin;
-}
-
-void casino::deposit_bonus(asset quantity, const std::string& memo) {
-    require_auth(get_owner());
-    check(memo.size() <= 256, "memo has more than 256 bytes");
-    bstate.total_allocated += quantity;
-    check(bstate.total_allocated <= token::get_balance(get_self(), core_symbol), "total bonus cannot exceed casino balance");
 }
 
 void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {

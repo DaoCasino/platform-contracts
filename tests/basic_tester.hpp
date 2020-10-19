@@ -76,12 +76,12 @@ public:
                                 ("memo",     "") );
     }
 
-    action_result transfer( const name& from, const name& to, const asset& amount, const name& manager = config::system_account_name ) {
-        return push_action( N(eosio.token), N(transfer), manager, mutable_variant_object()
+    action_result transfer( const name& from, const name& to, const asset& amount, const std::string& memo = "") {
+        return push_action( N(eosio.token), N(transfer), from, mutable_variant_object()
                                 ("from",     from)
                                 ("to",       to)
                                 ("quantity", amount)
-                                ("memo",     "") );
+                                ("memo",     memo) );
     }
 
     action_result push_action( const action_name& contract, const action_name &name, const action_name &actor, const variant_object& data) {

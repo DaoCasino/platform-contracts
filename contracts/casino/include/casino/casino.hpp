@@ -133,9 +133,6 @@ public:
     [[eosio::action("setadminbon")]]
     void set_bonus_admin(name new_admin); // sets bonus admin for managing bonus related logic
 
-    [[eosio::action("depositbon")]]
-    void deposit_bonus(asset quantity, const std::string& memo); // doesn't actually deposit anything
-
     [[eosio::action("withdrawbon")]]
     void withdraw_bonus(name to, asset quantity, const std::string& memo);
 
@@ -153,7 +150,7 @@ public:
     void session_lock_bonus(name game_account, name player_account, asset amount); // locks player's bonus for current session
 
     [[eosio::action("sesaddbon")]]
-    void session_add_bonus(name game_account, name account, asset amount); // adds player bonus if he wins
+    void session_add_bonus(name game_account, name player_account, asset amount); // adds player bonus if he wins
     // ==========================
     // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
