@@ -856,6 +856,16 @@ BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["volume_real"].as<asset>(), STRSYM("10.0000"));
 
     BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newpayout), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", STRSYM("20.0000"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["profit_real"].as<asset>(), STRSYM("10.0000"));
+
+
+    BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(sendbon), casino_account, mvo()
             ("to", player_account)
             ("amount", STRSYM("200.0000"))

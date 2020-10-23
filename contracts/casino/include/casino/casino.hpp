@@ -120,11 +120,13 @@ public:
     void session_update(name game_account, asset max_win_delta);
     [[eosio::action("sesclose")]]
     void session_close(name game_account, asset quantity);
-    // newsession is called when the game starts
+
     [[eosio::action("newsession")]]
     void on_new_session(name game_account, name player_account);
     [[eosio::action("newdeposit")]]
     void on_new_deposit(name game_account, name player_account, asset quantity);
+    [[eosio::action("newpayout")]]
+    void on_new_payout(name game_account, name player_account, asset quantity);
     [[eosio::action("pausegame")]]
     void pause_game(uint64_t game_id, bool pause);
 
@@ -229,6 +231,7 @@ private:
 
     void verify_game(uint64_t game_id);
     uint64_t get_game_id(name game_account);
+    void verify_from_game_account(name game_account);
 
     void session_update(uint64_t game_id, asset quantity) {
         const auto itr = game_state.require_find(game_id, "game not found");

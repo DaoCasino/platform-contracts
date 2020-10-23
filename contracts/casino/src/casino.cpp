@@ -94,12 +94,6 @@ void casino::on_loss(name game_account, name player_account, eosio::asset quanti
     const auto game_id = get_game_id(game_account);
     transfer(player_account, quantity, "player winnings");
     sub_balance(game_id, quantity * get_profit_margin(game_id) / percent_100);
-
-    // casino loses - player wins 'BET's
-    const auto player_stat = get_or_create_player_stat(player_account);
-    player_stats.modify(player_stat, _self, [&](auto& row) {
-        row.profit_real += quantity;
-    });
 }
 
 void casino::claim_profit(name game_account) {
@@ -122,6 +116,12 @@ uint64_t casino::get_game_id(name game_account) {
 void casino::verify_game(uint64_t game_id) {
     check(platform::read::is_active_game(get_platform(), game_id), "the game was not verified by the platform");
     check(is_active_game(game_id), "the game is paused");
+}
+
+void casino::verify_from_game_account(name game_account) {
+    require_auth(game_account);
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
 }
 
 void casino::withdraw(name beneficiary_account, asset quantity) {
@@ -177,14 +177,19 @@ void casino::on_new_session(name game_account, name player_account) {
 }
 
 void casino::on_new_deposit(name game_account, name player_account, asset quantity) {
-    require_auth(game_account);
-    const auto game_id = get_game_id(game_account);
-    verify_game(game_id);
-
+    verify_from_game_account(game_account);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
         row.volume_real += quantity;
         row.profit_real -= quantity;
+    });
+}
+
+void casino::on_new_payout(name game_account, name player_account, asset quantity) {
+    verify_from_game_account(game_account);
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.profit_real += quantity;
     });
 }
 
@@ -242,8 +247,7 @@ void casino::convert_bonus(name account, const std::string& memo) {
 }
 
 void casino::session_lock_bonus(name game_account, name player_account, asset amount) {
-    require_auth(game_account);
-    verify_game(get_game_id(game_account));
+    verify_from_game_account(game_account);
     const auto row = bonus_balance.require_find(player_account.value, "player has no bonus");
     check(amount <= row->balance, "lock amount cannot exceed player's bonus balance");
     bonus_balance.modify(row, _self, [&](auto& row) {
@@ -263,8 +267,7 @@ void casino::session_lock_bonus(name game_account, name player_account, asset am
 }
 
 void casino::session_add_bonus(name game_account, name account, asset amount) {
-    require_auth(game_account);
-    verify_game(get_game_id(game_account));
+    verify_from_game_account(game_account);
     const auto row = bonus_balance.find(account.value);
     create_or_update_bonus_balance(account, amount);
 
