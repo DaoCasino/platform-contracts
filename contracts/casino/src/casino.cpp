@@ -176,7 +176,7 @@ void casino::on_new_session(name game_account, name player_account) {
     });
 }
 
-void casino::on_new_deposit(name game_account, name player_account, asset quantity) {
+void casino::on_ses_deposit(name game_account, name player_account, asset quantity) {
     verify_from_game_account(game_account);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
@@ -185,7 +185,7 @@ void casino::on_new_deposit(name game_account, name player_account, asset quanti
     });
 }
 
-void casino::on_new_payout(name game_account, name player_account, asset quantity) {
+void casino::on_ses_payout(name game_account, name player_account, asset quantity) {
     verify_from_game_account(game_account);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {

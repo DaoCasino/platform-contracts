@@ -120,13 +120,13 @@ public:
     void session_update(name game_account, asset max_win_delta);
     [[eosio::action("sesclose")]]
     void session_close(name game_account, asset quantity);
+    [[eosio::action("sesnewdepo")]]
+    void on_ses_deposit(name game_account, name player_account, asset quantity);
+    [[eosio::action("sespayout")]]
+    void on_ses_payout(name game_account, name player_account, asset quantity);
 
     [[eosio::action("newsession")]]
     void on_new_session(name game_account, name player_account);
-    [[eosio::action("newdeposit")]]
-    void on_new_deposit(name game_account, name player_account, asset quantity);
-    [[eosio::action("newpayout")]]
-    void on_new_payout(name game_account, name player_account, asset quantity);
     [[eosio::action("pausegame")]]
     void pause_game(uint64_t game_id, bool pause);
 
