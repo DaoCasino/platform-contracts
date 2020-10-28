@@ -126,7 +126,9 @@ public:
     void on_ses_payout(name game_account, name player_account, asset quantity);
 
     [[eosio::action("newsession")]]
-    void on_new_session(name game_account, name player_account);
+    void on_new_session(name game_account); // legacy for ABI compatibility
+    [[eosio::action("newsessionpl")]]
+    void on_new_session_player(name game_account, name player_account);
     [[eosio::action("pausegame")]]
     void pause_game(uint64_t game_id, bool pause);
 

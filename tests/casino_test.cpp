@@ -151,7 +151,7 @@ BOOST_FIXTURE_TEST_CASE(remove_game_active_session_failure, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(newsession), casino_account, mvo()
+        push_action(casino_account, N(newsessionpl), casino_account, mvo()
             ("game_account", casino_account)
             ("player_account", player_account)
         )
@@ -542,7 +542,7 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account), STRSYM("30.0000"));
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(newsession), game_account, mvo()
+        push_action(casino_account, N(newsessionpl), game_account, mvo()
             ("game_account", game_account)
             ("player_account", player_account)
         )
@@ -838,7 +838,7 @@ BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(newsession), game_account, mvo()
+        push_action(casino_account, N(newsessionpl), game_account, mvo()
             ("game_account", game_account)
             ("player_account", player_account)
         )

@@ -155,7 +155,13 @@ void casino::session_close(name game_account, asset quantity) {
     session_close(get_game_id(game_account), quantity);
 }
 
-void casino::on_new_session(name game_account, name player_account) {
+void casino::on_new_session(name game_account) {
+    require_auth(game_account);
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+}
+
+void casino::on_new_session_player(name game_account, name player_account) {
     require_auth(game_account);
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
