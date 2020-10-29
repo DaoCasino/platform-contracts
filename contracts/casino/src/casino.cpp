@@ -10,22 +10,26 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     version(_self, _self.value),
     games(_self, _self.value),
     game_state(_self, _self.value),
-    _gstate(_self, _self.value)
-{
+    _gstate(_self, _self.value),
+    _bstate(_self, _self.value),
+    bonus_balance(_self, _self.value),
+    player_stats(_self, _self.value) {
+
     version.set(version_row {CONTRACT_VERSION}, _self);
 
-    if (!_gstate.exists()) {
-        // on contract first call
-        _gstate.set(global_state{
-            zero_asset,
-            zero_asset,
-            0,
-            current_time_point(),
-            name(),
-            _self
-        }, _self);
-    }
-    gstate = _gstate.get();
+    gstate = _gstate.get_or_create(_self, global_state{
+        zero_asset,
+        zero_asset,
+        0,
+        current_time_point(),
+        name(),
+        _self
+    });
+
+    bstate = _bstate.get_or_create(_self, bonus_pool_state{
+        _self,
+        zero_asset
+    });
 }
 
 void casino::set_platform(name platform_name) {
@@ -71,6 +75,10 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
     if (game_account == get_self() || casino_account != get_self()) {
         return;
     }
+    if (memo == "bonus") {
+        bstate.total_allocated += quantity;
+        return;
+    }
     platform::game_table platform_games(get_platform(), get_platform().value);
     auto games_idx = platform_games.get_index<"address"_n>();
 
@@ -110,10 +118,16 @@ void casino::verify_game(uint64_t game_id) {
     check(is_active_game(game_id), "the game is paused");
 }
 
+void casino::verify_from_game_account(name game_account) {
+    require_auth(game_account);
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+}
+
 void casino::withdraw(name beneficiary_account, asset quantity) {
     require_auth(get_owner());
     const auto ct = current_time_point();
-    const auto account_balance = token::get_balance(_self, core_symbol);
+    const auto account_balance = token::get_balance(_self, core_symbol) - bstate.total_allocated;
     // in case game developers screwed it up
     const auto game_profits_sum = std::max(zero_asset, gstate.game_profits_sum);
 
@@ -141,15 +155,48 @@ void casino::session_close(name game_account, asset quantity) {
     session_close(get_game_id(game_account), quantity);
 }
 
-void casino::session_new_deposit(name game_account, asset quantity) {
-    require_auth(game_account);
-}
-
 void casino::on_new_session(name game_account) {
     require_auth(game_account);
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
-    on_new_session(game_id);
+}
+
+void casino::on_new_session_player(name game_account, name player_account) {
+    require_auth(game_account);
+    const auto game_id = get_game_id(game_account);
+    verify_game(game_id);
+
+    // game state
+    const auto itr = game_state.require_find(game_id, "game not found");
+    game_state.modify(itr, _self, [&](auto& row) {
+        row.active_sessions_amount++;
+    });
+
+    // global state
+    gstate.active_sessions_amount++;
+
+    // player stats
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.sessions_created++;
+    });
+}
+
+void casino::on_ses_deposit(name game_account, name player_account, asset quantity) {
+    verify_from_game_account(game_account);
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.volume_real += quantity;
+        row.profit_real -= quantity;
+    });
+}
+
+void casino::on_ses_payout(name game_account, name player_account, asset quantity) {
+    verify_from_game_account(game_account);
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.profit_real += quantity;
+    });
 }
 
 void casino::pause_game(uint64_t game_id, bool pause) {
@@ -165,6 +212,75 @@ void casino::pause_game(uint64_t game_id, bool pause) {
 
 uint32_t casino::get_profit_margin(uint64_t game_id) const {
     return platform::read::get_game(get_platform(), game_id).profit_margin;
+}
+
+void casino::set_bonus_admin(name new_admin) {
+    require_auth(get_owner());
+    check(is_account(new_admin), "new bonus admin account does not exist");
+    bstate.admin = new_admin;
+}
+
+void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {
+    require_auth(get_owner());
+    check(memo.size() <= 256, "memo has more than 256 bytes");
+    check(quantity <= bstate.total_allocated, "withdraw quantity cannot exceed total bonus");
+    bstate.total_allocated -= quantity;
+    transfer(to, quantity, memo);
+}
+
+void casino::send_bonus(name to, asset amount) {
+    require_auth(bstate.admin);
+    create_or_update_bonus_balance(to, amount);
+}
+
+void casino::subtract_bonus(name from, asset amount) {
+    require_auth(bstate.admin);
+    const auto itr = bonus_balance.require_find(from.value, "player has no bonus");
+    check(amount <= itr->balance, "subtract amount cannot exceed player's bonus balance");
+    bonus_balance.modify(itr, _self, [&](auto& row) {
+        row.balance -= amount;
+    });
+}
+
+void casino::convert_bonus(name account, const std::string& memo) {
+    require_auth(bstate.admin);
+    check(memo.size() <= 256, "memo has more than 256 bytes");
+    const auto row = bonus_balance.require_find(account.value, "player has no bonus");
+    check(row->balance <= bstate.total_allocated, "convert quantity cannot exceed total allocated");
+    bstate.total_allocated -= row->balance;
+    transfer(account, row->balance, memo);
+    bonus_balance.erase(row);
+}
+
+void casino::session_lock_bonus(name game_account, name player_account, asset amount) {
+    verify_from_game_account(game_account);
+    const auto row = bonus_balance.require_find(player_account.value, "player has no bonus");
+    check(amount <= row->balance, "lock amount cannot exceed player's bonus balance");
+    bonus_balance.modify(row, _self, [&](auto& row) {
+        row.balance -= amount;
+    });
+    if (row->balance == zero_asset) {
+        bonus_balance.erase(row);
+    }
+
+    // when player makes a bet using bonuses (volume increases)
+    // his tokens are locked (assume he loses)
+    const auto player_stat = get_or_create_player_stat(player_account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.volume_bonus += amount;
+        row.profit_bonus -= amount;
+    });
+}
+
+void casino::session_add_bonus(name game_account, name account, asset amount) {
+    verify_from_game_account(game_account);
+    const auto row = bonus_balance.find(account.value);
+    create_or_update_bonus_balance(account, amount);
+
+    const auto player_stat = get_or_create_player_stat(account);
+    player_stats.modify(player_stat, _self, [&](auto& row) {
+        row.profit_bonus += amount;
+    });
 }
 
 } // namespace casino

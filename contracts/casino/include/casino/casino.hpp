@@ -3,6 +3,7 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 #include <eosio/asset.hpp>
+#include <eosio/binary_extension.hpp>
 #include <platform/platform.hpp>
 
 namespace casino {
@@ -50,11 +51,41 @@ struct [[eosio::table("global"), eosio::contract("casino")]] global_state {
     uint64_t active_sessions_amount; // amount of active sessions
     time_point last_withdraw_time; // casino last withdraw time
     name platform; // platfrom account name
-    name owner; // owner has the rights to withdraw and update the contract state
+    name owner; // owner has permission to withdraw and update the contract state
 };
 
 using global_state_singleton = eosio::singleton<"global"_n, global_state>;
 
+struct [[eosio::table("bonuspool"), eosio::contract("casino")]] bonus_pool_state {
+    name admin; // bonus pool admin has permissions to deposit and withdraw
+    asset total_allocated; // quantity allocated for bonus pool
+};
+
+using bonus_pool_state_singleton = eosio::singleton<"bonuspool"_n, bonus_pool_state>;
+
+struct [[eosio::table("bonusbalance"), eosio::contract("casino")]] bonus_balance_row {
+    name player;
+    asset balance;
+
+    uint64_t primary_key() const { return player.value; }
+};
+
+using bonus_balance_table = eosio::multi_index<"bonusbalance"_n, bonus_balance_row>;
+
+struct [[eosio::table("playerstats"), eosio::contract("casino")]] player_stats_row {
+    name player;
+    uint64_t sessions_created;
+
+    asset volume_real; // volume bet using 'BET'
+    asset volume_bonus; // volume bet using bonus
+
+    asset profit_real; // profit in 'BET'
+    asset profit_bonus; // profit in bonus
+
+    uint64_t primary_key() const { return player.value; }
+};
+
+using player_stats_table = eosio::multi_index<"playerstats"_n, player_stats_row>;
 
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
@@ -64,8 +95,11 @@ public:
 
     ~casino() {
         _gstate.set(gstate, _self);
+        _bstate.set(bstate, _self);
     }
 
+    // =================
+    // general methods
     [[eosio::action("setplatform")]]
     void set_platform(name platform_name);
     [[eosio::action("addgame")]]
@@ -84,16 +118,45 @@ public:
     void withdraw(name beneficiary_account, asset quantity);
     [[eosio::action("sesupdate")]]
     void session_update(name game_account, asset max_win_delta);
-    [[eosio::action("sesnewdepo")]]
-    void session_new_deposit(name game_account, asset quantity); // stub for monitoring deposits
     [[eosio::action("sesclose")]]
     void session_close(name game_account, asset quantity);
-    // newsession is called when the game starts
+    [[eosio::action("sesnewdepo")]]
+    void on_ses_deposit(name game_account, name player_account, asset quantity);
+    [[eosio::action("sespayout")]]
+    void on_ses_payout(name game_account, name player_account, asset quantity);
+
     [[eosio::action("newsession")]]
-    void on_new_session(name game_account);
+    void on_new_session(name game_account); // legacy for ABI compatibility
+    [[eosio::action("newsessionpl")]]
+    void on_new_session_player(name game_account, name player_account);
     [[eosio::action("pausegame")]]
     void pause_game(uint64_t game_id, bool pause);
 
+    // =========================
+    // bonus related methods
+    [[eosio::action("setadminbon")]]
+    void set_bonus_admin(name new_admin); // sets bonus admin for managing bonus related logic
+
+    [[eosio::action("withdrawbon")]]
+    void withdraw_bonus(name to, asset quantity, const std::string& memo);
+
+    [[eosio::action("sendbon")]]
+    void send_bonus(name to, asset amount);
+
+    [[eosio::action("subtractbon")]]
+    void subtract_bonus(name from, asset amount);
+
+    [[eosio::action("convertbon")]]
+    void convert_bonus(name account, const std::string& memo);
+
+    // session
+    [[eosio::action("seslockbon")]]
+    void session_lock_bonus(name game_account, name player_account, asset amount); // locks player's bonus for current session
+
+    [[eosio::action("sesaddbon")]]
+    void session_add_bonus(name game_account, name player_account, asset amount); // adds player bonus if he wins
+    // ==========================
+    // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
     static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
@@ -105,8 +168,16 @@ private:
     version_singleton version;
     game_table games;
     game_state_table game_state;
+
     global_state_singleton _gstate;
     global_state gstate;
+
+    bonus_pool_state bstate;
+    bonus_pool_state_singleton _bstate;
+
+    bonus_balance_table bonus_balance;
+
+    player_stats_table player_stats;
 
     name get_owner() const {
         return gstate.owner;
@@ -162,6 +233,7 @@ private:
 
     void verify_game(uint64_t game_id);
     uint64_t get_game_id(name game_account);
+    void verify_from_game_account(name game_account);
 
     void session_update(uint64_t game_id, asset quantity) {
         const auto itr = game_state.require_find(game_id, "game not found");
@@ -186,19 +258,42 @@ private:
         gstate.active_sessions_amount--;
     }
 
-    void on_new_session(uint64_t game_id) {
-        const auto itr = game_state.require_find(game_id, "game not found");
-        game_state.modify(itr, _self, [&](auto& row) {
-            row.active_sessions_amount++;
-        });
-        gstate.active_sessions_amount++;
+    player_stats_table::const_iterator get_or_create_player_stat(name player_account) {
+        const auto itr = player_stats.find(player_account.value);
+        if (itr == player_stats.end()) {
+            return player_stats.emplace(_self, [&](auto& row) {
+                row = player_stats_row{
+                    player_account,
+                    0,
+                    zero_asset,
+                    zero_asset,
+                    zero_asset,
+                    zero_asset
+                };
+            });
+        }
+        return itr;
     }
 
     name get_platform() const {
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
     }
-}; // casino contract
+
+    void create_or_update_bonus_balance(name player, asset amount) {
+        const auto itr = bonus_balance.find(player.value);
+        if (itr == bonus_balance.end()) {
+            bonus_balance.emplace(_self, [&](auto& row) {
+                row.player = player;
+                row.balance = amount;
+            });
+        } else {
+            bonus_balance.modify(itr, _self, [&](auto& row) {
+                row.balance += amount;
+            });
+        }
+    }
+};
 
 const asset casino::zero_asset = asset(0, casino::core_symbol);
 
