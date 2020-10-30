@@ -87,6 +87,14 @@ struct [[eosio::table("playerstats"), eosio::contract("casino")]] player_stats_r
 
 using player_stats_table = eosio::multi_index<"playerstats"_n, player_stats_row>;
 
+struct [[eosio::table("newplayer"), eosio::contract("casino")]] new_player_row {
+    name player;
+
+    uint64_t primary_key() const { return player.value; }
+};
+
+using new_player_table = eosio::multi_index<"newplayer"_n, new_player_row>;
+
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -155,15 +163,23 @@ public:
 
     [[eosio::action("sesaddbon")]]
     void session_add_bonus(name game_account, name player_account, asset amount); // adds player bonus if he wins
+
+    [[eosio::action("newplayer")]]
+    void add_new_user(name player_account); // called by platform on user sign up
+
     // ==========================
     // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
     static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
     static constexpr int64_t useconds_per_month = 30 * useconds_per_day;
+
     static constexpr symbol core_symbol = symbol(eosio::symbol_code("BET"), 4);
     static const asset zero_asset;
+
     static const int percent_100 = 100;
+
+    static constexpr name platform_game_permission = "gameaction"_n;
 private:
     version_singleton version;
     game_table games;
@@ -178,6 +194,8 @@ private:
     bonus_balance_table bonus_balance;
 
     player_stats_table player_stats;
+
+    new_player_table new_players;
 
     name get_owner() const {
         return gstate.owner;
@@ -279,6 +297,8 @@ private:
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
     }
+
+    void check_from_platform_game() const { eosio::require_auth({get_platform(), platform_game_permission}); }
 
     void create_or_update_bonus_balance(name player, asset amount) {
         const auto itr = bonus_balance.find(player.value);

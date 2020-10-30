@@ -1,8 +1,6 @@
 #include <casino/casino.hpp>
 #include <casino/version.hpp>
 
-using eosio::check;
-
 namespace casino {
 
 casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
@@ -13,7 +11,8 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     _gstate(_self, _self.value),
     _bstate(_self, _self.value),
     bonus_balance(_self, _self.value),
-    player_stats(_self, _self.value) {
+    player_stats(_self, _self.value),
+    new_players(_self, _self.value) {
 
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -123,6 +122,15 @@ void casino::verify_from_game_account(name game_account) {
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
 }
+
+void casino::add_new_user(name player_account) {
+    check_from_platform_game();
+    const auto itr = new_players.find(player_account.value);
+    eosio::check(itr == new_players.end(), "player is already in the table");
+    new_players.emplace(_self, [&](auto& row) {
+        row.player = player_account;
+    });
+};
 
 void casino::withdraw(name beneficiary_account, asset quantity) {
     require_auth(get_owner());

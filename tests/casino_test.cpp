@@ -25,6 +25,9 @@ public:
         push_action(casino_account, N(setplatform), casino_account, mvo()
             ("platform_name", platform_name)
         );
+
+        set_authority(platform_name, N(gameaction), {get_public_key(platform_name, "gameaction")}, N(active));
+        link_authority(platform_name, casino_account, N(gameaction), N(newplayer));
     }
 
     fc::variant get_game(uint64_t game_id) {
@@ -65,6 +68,51 @@ public:
     fc::variant get_player_stats(name player) {
         vector<char> data = get_row_by_account(casino_account, casino_account, N(playerstats), player);
         return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("player_stats_row", data, abi_serializer_max_time);
+    }
+
+    fc::variant get_new_player(name player) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(newplayer), player);
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("new_player_row", data, abi_serializer_max_time);
+    }
+
+    action_result push_action_custom_auth(const action_name& contract,
+                                        const action_name& name,
+                                        const permission_level& auth,
+                                        const permission_level& key,
+                                        const variant_object& data) {
+        using namespace eosio;
+        using namespace eosio::chain;
+
+        string action_type_name = abi_ser[contract].get_action_type(name);
+
+        action act;
+        act.account = contract;
+        act.name = name;
+        act.data = abi_ser[contract].variant_to_binary(action_type_name, data, abi_serializer_max_time);
+
+        act.authorization.push_back(auth);
+
+        signed_transaction trx;
+        trx.actions.emplace_back(std::move(act));
+        set_transaction_headers(trx);
+        trx.sign(get_private_key(key.actor, key.permission.to_string()), control->get_chain_id());
+        try {
+            push_transaction(trx);
+        } catch (const fc::exception& ex) {
+            edump((ex.to_detail_string()));
+            return error(ex.top_message()); // top_message() is assumed by many tests; otherwise they fail
+                                            // return error(ex.to_detail_string());
+        }
+        produce_block();
+        BOOST_REQUIRE_EQUAL(true, chain_has_transaction(trx.id()));
+        return success();
+    }
+
+    action_result push_action_custom_auth(const action_name& contract,
+                              const action_name& name,
+                              const permission_level& auth,
+                              const variant_object& data) {
+        return push_action_custom_auth(contract, name, auth, auth, data);
     }
 };
 
@@ -881,6 +929,25 @@ BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
     );
     BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["profit_bonus"].as<asset>(), STRSYM("-100.0000"));
     BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["volume_bonus"].as<asset>(), STRSYM("100.0000"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(add_new_player, casino_tester) try {
+    const name player = N(player.x);
+    create_account(player);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action_custom_auth(casino_account, N(newplayer), {platform_name, N(gameaction)}, mvo()
+            ("player_account", player)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_new_player(player)["player"].as<name>(), player);
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("player is already in the table"),
+        push_action_custom_auth(casino_account, N(newplayer), {platform_name, N(gameaction)}, mvo()
+            ("player_account", player)
+        )
+    );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
