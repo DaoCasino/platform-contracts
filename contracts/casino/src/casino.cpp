@@ -287,8 +287,8 @@ void casino::session_add_bonus(name game_account, name account, asset amount) {
 
 void casino::add_game_no_bonus(name game_account) {
     require_auth(bstate.admin);
+    
     const auto game_id = get_game_id(game_account);
-
     const auto it = games_no_bonus.find(game_id);
     check(it == games_no_bonus.end(), "game is already restricted");
 
@@ -299,8 +299,8 @@ void casino::add_game_no_bonus(name game_account) {
 
 void casino::remove_game_no_bonus(name game_account) {
     require_auth(bstate.admin);
+    
     const auto game_id = get_game_id(game_account);
-
     const auto it = games_no_bonus.require_find(game_id, "game is not restricted");
 
     games_no_bonus.erase(it);

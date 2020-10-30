@@ -168,7 +168,6 @@ public:
     [[eosio::action("addgamenobon")]]
     void add_game_no_bonus(name game_account); // add game to bonus restricted games table
 
-    // games no bonus methods
     [[eosio::action("rmgamenobon")]]
     void remove_game_no_bonus(name game_account); // rm game from bonus restricted games table
 
