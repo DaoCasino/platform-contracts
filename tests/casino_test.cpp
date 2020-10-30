@@ -889,11 +889,10 @@ BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(games_no_bonus, casino_tester) try {
-    name bonus_admin = N(admin.bon);
     name game_account = N(game.boy);
     name player_account = N(player.acc);
 
-    create_accounts({bonus_admin, game_account, player_account});
+    create_accounts({game_account, player_account});
 
     transfer(config::system_account_name, casino_account, STRSYM("100.0000"), "bonus");
 
@@ -913,19 +912,13 @@ BOOST_FIXTURE_TEST_CASE(games_no_bonus, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(setadminbon), casino_account, mvo()
-            ("new_admin", bonus_admin)
-        )
-    );
-
-    BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(addgamenobon), bonus_admin, mvo()
+        push_action(casino_account, N(addgamenobon), casino_account, mvo()
             ("game_account", game_account)
         )
     );
 
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("game is already restricted"),
-        push_action(casino_account, N(addgamenobon), bonus_admin, mvo()
+        push_action(casino_account, N(addgamenobon), casino_account, mvo()
             ("game_account", game_account)
         )
     );
@@ -933,7 +926,7 @@ BOOST_FIXTURE_TEST_CASE(games_no_bonus, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_game_no_bonus(0)["game_id"].as<uint64_t>(), 0);
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(sendbon), bonus_admin, mvo()
+        push_action(casino_account, N(sendbon), casino_account, mvo()
             ("to", player_account)
             ("amount", STRSYM("100.0000"))
             ("memo", "")
@@ -951,13 +944,13 @@ BOOST_FIXTURE_TEST_CASE(games_no_bonus, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), STRSYM("100.0000"));
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(rmgamenobon), bonus_admin, mvo()
+        push_action(casino_account, N(rmgamenobon), casino_account, mvo()
             ("game_account", game_account)
         )
     );
 
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("game is not restricted"),
-        push_action(casino_account, N(rmgamenobon), bonus_admin, mvo()
+        push_action(casino_account, N(rmgamenobon), casino_account, mvo()
             ("game_account", game_account)
         )
     );
