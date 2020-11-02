@@ -70,11 +70,6 @@ public:
         return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("player_stats_row", data, abi_serializer_max_time);
     }
 
-    fc::variant get_new_player(name player) {
-        vector<char> data = get_row_by_account(casino_account, casino_account, N(newplayer), player);
-        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("new_player_row", data, abi_serializer_max_time);
-    }
-
     action_result push_action_custom_auth(const action_name& contract,
                                         const action_name& name,
                                         const permission_level& auth,
@@ -936,18 +931,18 @@ BOOST_FIXTURE_TEST_CASE(add_new_player, casino_tester) try {
     create_account(player);
 
     BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(setgreetbon), casino_account, mvo()
+            ("amount", STRSYM("1.0000"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
         push_action_custom_auth(casino_account, N(newplayer), {platform_name, N(gameaction)}, mvo()
             ("player_account", player)
         )
     );
 
-    BOOST_REQUIRE_EQUAL(get_new_player(player)["player"].as<name>(), player);
-
-    BOOST_REQUIRE_EQUAL(wasm_assert_msg("player is already in the table"),
-        push_action_custom_auth(casino_account, N(newplayer), {platform_name, N(gameaction)}, mvo()
-            ("player_account", player)
-        )
-    );
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player), STRSYM("1.0000"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -11,8 +11,7 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     _gstate(_self, _self.value),
     _bstate(_self, _self.value),
     bonus_balance(_self, _self.value),
-    player_stats(_self, _self.value),
-    new_players(_self, _self.value) {
+    player_stats(_self, _self.value) {
 
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -27,6 +26,7 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
 
     bstate = _bstate.get_or_create(_self, bonus_pool_state{
         _self,
+        zero_asset,
         zero_asset
     });
 }
@@ -123,13 +123,9 @@ void casino::verify_from_game_account(name game_account) {
     verify_game(game_id);
 }
 
-void casino::add_new_user(name player_account) {
+void casino::greet_new_player(name player_account) {
     check_from_platform_game();
-    const auto itr = new_players.find(player_account.value);
-    eosio::check(itr == new_players.end(), "player is already in the table");
-    new_players.emplace(_self, [&](auto& row) {
-        row.player = player_account;
-    });
+    create_or_update_bonus_balance(player_account, bstate.greeting_bonus);
 };
 
 void casino::withdraw(name beneficiary_account, asset quantity) {
@@ -226,6 +222,11 @@ void casino::set_bonus_admin(name new_admin) {
     require_auth(get_owner());
     check(is_account(new_admin), "new bonus admin account does not exist");
     bstate.admin = new_admin;
+}
+
+void casino::set_greeting_bonus(asset amount) {
+    require_auth(bstate.admin);
+    bstate.greeting_bonus = amount;
 }
 
 void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {

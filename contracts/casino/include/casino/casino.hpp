@@ -59,6 +59,7 @@ using global_state_singleton = eosio::singleton<"global"_n, global_state>;
 struct [[eosio::table("bonuspool"), eosio::contract("casino")]] bonus_pool_state {
     name admin; // bonus pool admin has permissions to deposit and withdraw
     asset total_allocated; // quantity allocated for bonus pool
+    asset greeting_bonus; // bonus for new users
 };
 
 using bonus_pool_state_singleton = eosio::singleton<"bonuspool"_n, bonus_pool_state>;
@@ -86,14 +87,6 @@ struct [[eosio::table("playerstats"), eosio::contract("casino")]] player_stats_r
 };
 
 using player_stats_table = eosio::multi_index<"playerstats"_n, player_stats_row>;
-
-struct [[eosio::table("newplayer"), eosio::contract("casino")]] new_player_row {
-    name player;
-
-    uint64_t primary_key() const { return player.value; }
-};
-
-using new_player_table = eosio::multi_index<"newplayer"_n, new_player_row>;
 
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
@@ -165,7 +158,10 @@ public:
     void session_add_bonus(name game_account, name player_account, asset amount); // adds player bonus if he wins
 
     [[eosio::action("newplayer")]]
-    void add_new_user(name player_account); // called by platform on user sign up
+    void greet_new_player(name player_account); // called by platform on user sign up
+
+    [[eosio::action("setgreetbon")]]
+    void set_greeting_bonus(asset amount);
 
     // ==========================
     // constants
@@ -194,8 +190,6 @@ private:
     bonus_balance_table bonus_balance;
 
     player_stats_table player_stats;
-
-    new_player_table new_players;
 
     name get_owner() const {
         return gstate.owner;
