@@ -13,7 +13,8 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     _gstate(_self, _self.value),
     _bstate(_self, _self.value),
     bonus_balance(_self, _self.value),
-    player_stats(_self, _self.value) {
+    player_stats(_self, _self.value),
+    games_no_bonus(_self, _self.value) {
 
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -256,6 +257,7 @@ void casino::session_lock_bonus(name game_account, name player_account, asset am
     verify_from_game_account(game_account);
     const auto row = bonus_balance.require_find(player_account.value, "player has no bonus");
     check(amount <= row->balance, "lock amount cannot exceed player's bonus balance");
+    check(games_no_bonus.find(get_game_id(game_account)) == games_no_bonus.end(), "game is restricted to bonus");
     bonus_balance.modify(row, _self, [&](auto& row) {
         row.balance -= amount;
     });
@@ -281,6 +283,27 @@ void casino::session_add_bonus(name game_account, name account, asset amount) {
     player_stats.modify(player_stat, _self, [&](auto& row) {
         row.profit_bonus += amount;
     });
+}
+
+void casino::add_game_no_bonus(name game_account) {
+    require_auth(bstate.admin);
+    
+    const auto game_id = get_game_id(game_account);
+    const auto it = games_no_bonus.find(game_id);
+    check(it == games_no_bonus.end(), "game is already restricted");
+
+    games_no_bonus.emplace(_self, [&](auto& row) {
+        row.game_id = game_id;
+    });
+}
+
+void casino::remove_game_no_bonus(name game_account) {
+    require_auth(bstate.admin);
+    
+    const auto game_id = get_game_id(game_account);
+    const auto it = games_no_bonus.require_find(game_id, "game is not restricted");
+
+    games_no_bonus.erase(it);
 }
 
 } // namespace casino
