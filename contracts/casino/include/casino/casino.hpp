@@ -88,6 +88,14 @@ struct [[eosio::table("playerstats"), eosio::contract("casino")]] player_stats_r
 
 using player_stats_table = eosio::multi_index<"playerstats"_n, player_stats_row>;
 
+struct [[eosio::table("gamesnobon"), eosio::contract("casino")]] games_no_bonus_row {
+    uint64_t game_id;
+
+    uint64_t primary_key() const { return game_id; }
+};
+
+using games_no_bonus_table = eosio::multi_index<"gamesnobon"_n, games_no_bonus_row>;
+
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -162,6 +170,12 @@ public:
 
     [[eosio::action("setgreetbon")]]
     void set_greeting_bonus(asset amount);
+    // games no bonus methods
+    [[eosio::action("addgamenobon")]]
+    void add_game_no_bonus(name game_account); // add game to bonus restricted games table
+
+    [[eosio::action("rmgamenobon")]]
+    void remove_game_no_bonus(name game_account); // rm game from bonus restricted games table
 
     // ==========================
     // constants
@@ -190,6 +204,8 @@ private:
     bonus_balance_table bonus_balance;
 
     player_stats_table player_stats;
+
+    games_no_bonus_table games_no_bonus;
 
     name get_owner() const {
         return gstate.owner;

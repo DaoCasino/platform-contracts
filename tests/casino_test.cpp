@@ -109,6 +109,11 @@ public:
                               const variant_object& data) {
         return push_action_custom_auth(contract, name, auth, auth, data);
     }
+
+    fc::variant get_game_no_bonus(uint64_t game_id) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(gamesnobon), game_id);
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("games_no_bonus_row", data, abi_serializer_max_time);
+    }
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
@@ -943,6 +948,83 @@ BOOST_FIXTURE_TEST_CASE(add_new_player, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(get_bonus_balance(player), STRSYM("1.0000"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(games_no_bonus, casino_tester) try {
+    name game_account = N(game.boy);
+    name player_account = N(player.acc);
+
+    create_accounts({game_account, player_account});
+
+    transfer(config::system_account_name, casino_account, STRSYM("100.0000"), "bonus");
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgamenobon), casino_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("game is already restricted"),
+        push_action(casino_account, N(addgamenobon), casino_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_game_no_bonus(0)["game_id"].as<uint64_t>(), 0);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sendbon), casino_account, mvo()
+            ("to", player_account)
+            ("amount", STRSYM("100.0000"))
+            ("memo", "")
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), STRSYM("100.0000"));
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("game is restricted to bonus"),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", STRSYM("100.0000"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), STRSYM("100.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(rmgamenobon), casino_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("game is not restricted"),
+        push_action(casino_account, N(rmgamenobon), casino_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", STRSYM("100.0000"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), STRSYM("0.0000"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
