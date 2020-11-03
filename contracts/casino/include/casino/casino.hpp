@@ -59,6 +59,7 @@ using global_state_singleton = eosio::singleton<"global"_n, global_state>;
 struct [[eosio::table("bonuspool"), eosio::contract("casino")]] bonus_pool_state {
     name admin; // bonus pool admin has permissions to deposit and withdraw
     asset total_allocated; // quantity allocated for bonus pool
+    asset greeting_bonus; // bonus for new users
 };
 
 using bonus_pool_state_singleton = eosio::singleton<"bonuspool"_n, bonus_pool_state>;
@@ -164,6 +165,11 @@ public:
     [[eosio::action("sesaddbon")]]
     void session_add_bonus(name game_account, name player_account, asset amount); // adds player bonus if he wins
 
+    [[eosio::action("newplayer")]]
+    void greet_new_player(name player_account); // called by platform on user sign up
+
+    [[eosio::action("setgreetbon")]]
+    void set_greeting_bonus(asset amount);
     // games no bonus methods
     [[eosio::action("addgamenobon")]]
     void add_game_no_bonus(name game_account); // add game to bonus restricted games table
@@ -177,9 +183,13 @@ public:
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
     static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
     static constexpr int64_t useconds_per_month = 30 * useconds_per_day;
+
     static constexpr symbol core_symbol = symbol(eosio::symbol_code("BET"), 4);
     static const asset zero_asset;
+
     static const int percent_100 = 100;
+
+    static constexpr name platform_game_permission = "gameaction"_n;
 private:
     version_singleton version;
     game_table games;
@@ -297,6 +307,8 @@ private:
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
     }
+
+    void check_from_platform_game() const { eosio::require_auth({get_platform(), platform_game_permission}); }
 
     void create_or_update_bonus_balance(name player, asset amount) {
         const auto itr = bonus_balance.find(player.value);

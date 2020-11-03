@@ -1,8 +1,6 @@
 #include <casino/casino.hpp>
 #include <casino/version.hpp>
 
-using eosio::check;
-
 namespace casino {
 
 casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
@@ -29,6 +27,7 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
 
     bstate = _bstate.get_or_create(_self, bonus_pool_state{
         _self,
+        zero_asset,
         zero_asset
     });
 }
@@ -125,6 +124,11 @@ void casino::verify_from_game_account(name game_account) {
     verify_game(game_id);
 }
 
+void casino::greet_new_player(name player_account) {
+    check_from_platform_game();
+    create_or_update_bonus_balance(player_account, bstate.greeting_bonus);
+};
+
 void casino::withdraw(name beneficiary_account, asset quantity) {
     require_auth(get_owner());
     const auto ct = current_time_point();
@@ -219,6 +223,11 @@ void casino::set_bonus_admin(name new_admin) {
     require_auth(get_owner());
     check(is_account(new_admin), "new bonus admin account does not exist");
     bstate.admin = new_admin;
+}
+
+void casino::set_greeting_bonus(asset amount) {
+    require_auth(bstate.admin);
+    bstate.greeting_bonus = amount;
 }
 
 void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {
