@@ -187,7 +187,11 @@ void casino::on_new_session_player(name game_account, name player_account) {
     });
 }
 
-void casino::on_ses_deposit(name game_account, name player_account, asset quantity) {
+void casino::on_new_depo_legacy(name game_account, asset quantity) {
+    verify_from_game_account(game_account);
+}
+
+void casino::on_new_depo(name game_account, name player_account, asset quantity) {
     verify_from_game_account(game_account);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
@@ -296,7 +300,7 @@ void casino::session_add_bonus(name game_account, name account, asset amount) {
 
 void casino::add_game_no_bonus(name game_account) {
     require_auth(bstate.admin);
-    
+
     const auto game_id = get_game_id(game_account);
     const auto it = games_no_bonus.find(game_id);
     check(it == games_no_bonus.end(), "game is already restricted");
@@ -308,7 +312,7 @@ void casino::add_game_no_bonus(name game_account) {
 
 void casino::remove_game_no_bonus(name game_account) {
     require_auth(bstate.admin);
-    
+
     const auto game_id = get_game_id(game_account);
     const auto it = games_no_bonus.require_find(game_id, "game is not restricted");
 

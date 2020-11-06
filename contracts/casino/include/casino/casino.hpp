@@ -130,7 +130,9 @@ public:
     [[eosio::action("sesclose")]]
     void session_close(name game_account, asset quantity);
     [[eosio::action("sesnewdepo")]]
-    void on_ses_deposit(name game_account, name player_account, asset quantity);
+    void on_new_depo_legacy(name game_account, asset quantity); // legacy for ABI compatibility
+    [[eosio::action("sesnewdepo2")]]
+    void on_new_depo(name game_account, name player_account, asset quantity);
     [[eosio::action("sespayout")]]
     void on_ses_payout(name game_account, name player_account, asset quantity);
 
