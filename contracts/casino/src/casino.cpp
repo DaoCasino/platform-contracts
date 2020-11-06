@@ -164,22 +164,16 @@ void casino::on_new_session(name game_account) {
     require_auth(game_account);
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
-}
 
-void casino::on_new_session_player(name game_account, name player_account) {
-    require_auth(game_account);
-    const auto game_id = get_game_id(game_account);
-    verify_game(game_id);
-
-    // game state
     const auto itr = game_state.require_find(game_id, "game not found");
     game_state.modify(itr, _self, [&](auto& row) {
         row.active_sessions_amount++;
     });
-
-    // global state
     gstate.active_sessions_amount++;
+}
 
+void casino::on_new_session_player(name game_account, name player_account) {
+    on_new_session(game_account);
     // player stats
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {

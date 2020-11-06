@@ -35,6 +35,11 @@ public:
         return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("game_row", data, abi_serializer_max_time);
     }
 
+    fc::variant get_game_state(uint64_t game_id) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(gamestate), game_id );
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("game_state_row", data, abi_serializer_max_time);
+    }
+
     asset get_game_balance(uint64_t game_id, symbol balance_symbol = symbol{CORE_SYM}) {
         vector<char> data = get_row_by_account(casino_account, casino_account, N(gamestate), game_id );
         return data.empty() ? asset(0, balance_symbol) : abi_ser[casino_account].binary_to_variant("game_state_row", data, abi_serializer_max_time)["balance"].as<asset>();
@@ -1057,6 +1062,11 @@ BOOST_FIXTURE_TEST_CASE(legacy_actions, casino_tester) try {
             ("game_account", game_account)
         )
     );
+
+    const auto game_state = get_game_state(0);
+    const auto global_state = get_global();
+    BOOST_REQUIRE_EQUAL(global_state["active_sessions_amount"].as<int>(), 1);
+    BOOST_REQUIRE_EQUAL(game_state["active_sessions_amount"].as<int>(), 1);
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
