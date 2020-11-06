@@ -894,7 +894,7 @@ BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["sessions_created"].as<int>(), 1);
 
     BOOST_REQUIRE_EQUAL(success(),
-        push_action(casino_account, N(sesnewdepo), game_account, mvo()
+        push_action(casino_account, N(sesnewdepo2), game_account, mvo()
             ("game_account", game_account)
             ("player_account", player_account)
             ("quantity", STRSYM("10.0000"))
@@ -1025,6 +1025,38 @@ BOOST_FIXTURE_TEST_CASE(games_no_bonus, casino_tester) try {
         )
     );
     BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), STRSYM("0.0000"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(legacy_actions, casino_tester) try {
+    const name game_account = N(game.acc);
+    create_account(game_account);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesnewdepo), game_account, mvo()
+            ("game_account", game_account)
+            ("quantity", STRSYM("10.0000"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newsession), game_account, mvo()
+            ("game_account", game_account)
+        )
+    );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
