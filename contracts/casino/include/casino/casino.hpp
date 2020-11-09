@@ -274,6 +274,7 @@ private:
     }
 
     void session_close(uint64_t game_id, asset quantity) {
+        /*
         const auto itr = game_state.require_find(game_id, "game not found");
         check(quantity <= itr->active_sessions_sum, "invalid quantity in session close");
         check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
@@ -286,6 +287,7 @@ private:
         });
         gstate.game_active_sessions_sum -= quantity;
         gstate.active_sessions_amount--;
+        */
     }
 
     player_stats_table::const_iterator get_or_create_player_stat(name player_account) {
