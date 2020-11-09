@@ -3,5 +3,5 @@
 #include <string>
 
 namespace platform {
-    static const std::string CONTRACT_VERSION = "${CONTRACT_VERSION}";
+    static const std::string CONTRACT_VERSION = "${VERSION_FULL}";
 } // namespace platform
