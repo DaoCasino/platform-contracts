@@ -11,7 +11,7 @@ static const eosio::chain::name platform_name = N(platform);
 static const eosio::chain::name events_name = N(events);
 
 struct contracts {
-    static std::string version() { return "${CONTRACT_VERSION}"; };
+    static std::string version() { return "${VERSION_FULL}"; };
 
     struct platform {
         static std::vector<uint8_t> wasm() { return read_wasm("${CMAKE_BINARY_DIR}/../contracts/platform/platform.wasm"); }

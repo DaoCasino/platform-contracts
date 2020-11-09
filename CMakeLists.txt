@@ -23,7 +23,6 @@ else()
    set(TEST_BUILD_TYPE ${CMAKE_BUILD_TYPE})
 endif()
 
-
 message(STATUS "Building pratform contracts ${VERSION_FULL}")
 
 ExternalProject_Add(
@@ -32,6 +31,7 @@ ExternalProject_Add(
     BINARY_DIR ${CMAKE_BINARY_DIR}/contracts
     CMAKE_ARGS
         -DCMAKE_TOOLCHAIN_FILE=${EOSIO_CDT_ROOT}/lib/cmake/eosio.cdt/EosioWasmToolchain.cmake
+        -DVERSION_FULL=${VERSION_FULL}
     PATCH_COMMAND ""
     TEST_COMMAND ""
     INSTALL_COMMAND ""
@@ -71,6 +71,7 @@ ExternalProject_Add(
         -DLLVM_DIR=${LLVM_DIR}
         -Deosio_DIR=${CMAKE_MODULE_PATH}
         -DDAOBET_CONTRACTS_VERSION=${DAOBET_CONTRACTS_VERSION}
+        -DVERSION_FULL=${VERSION_FULL}
     SOURCE_DIR ${CMAKE_SOURCE_DIR}/tests
     BINARY_DIR ${CMAKE_BINARY_DIR}/tests
     BUILD_ALWAYS 1
