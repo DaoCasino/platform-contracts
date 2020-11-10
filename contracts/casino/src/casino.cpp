@@ -152,7 +152,7 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
 
 void casino::session_update(name game_account, asset max_win_delta) {
     require_auth(game_account);
-    session_update(get_game_id(game_account), max_win_delta);
+    session_update_volume(get_game_id(game_account), max_win_delta);
 }
 
 void casino::session_close(name game_account, asset quantity) {
@@ -161,19 +161,15 @@ void casino::session_close(name game_account, asset quantity) {
 }
 
 void casino::on_new_session(name game_account) {
+    // just a stub
+}
+
+void casino::on_new_session_player(name game_account, name player_account) {
     require_auth(game_account);
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
 
-    const auto itr = game_state.require_find(game_id, "game not found");
-    game_state.modify(itr, _self, [&](auto& row) {
-        row.active_sessions_amount++;
-    });
-    gstate.active_sessions_amount++;
-}
-
-void casino::on_new_session_player(name game_account, name player_account) {
-    on_new_session(game_account);
+    session_update_amount(game_id);
     // player stats
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {

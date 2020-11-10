@@ -265,12 +265,20 @@ private:
     uint64_t get_game_id(name game_account);
     void verify_from_game_account(name game_account);
 
-    void session_update(uint64_t game_id, asset quantity) {
+    void session_update_volume(uint64_t game_id, asset quantity) {
         const auto itr = game_state.require_find(game_id, "game not found");
         game_state.modify(itr, _self, [&](auto& row) {
             row.active_sessions_sum += quantity;
         });
         gstate.game_active_sessions_sum += quantity;
+    }
+
+    void session_update_amount(uint64_t game_id) {
+        const auto itr = game_state.require_find(game_id, "game not found");
+        game_state.modify(itr, _self, [&](auto& row) {
+            row.active_sessions_amount++;
+        });
+        gstate.active_sessions_amount++;
     }
 
     void session_close(uint64_t game_id, asset quantity) {
