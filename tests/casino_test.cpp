@@ -204,6 +204,12 @@ BOOST_FIXTURE_TEST_CASE(remove_game_active_session_failure, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newsession), casino_account, mvo()
+            ("game_account", casino_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(newsessionpl), casino_account, mvo()
             ("game_account", casino_account)
             ("player_account", player_account)
@@ -595,6 +601,12 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account), STRSYM("30.0000"));
 
     BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newsession), game_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(newsessionpl), game_account, mvo()
             ("game_account", game_account)
             ("player_account", player_account)
@@ -897,8 +909,7 @@ BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
         )
     );
 
-    BOOST_REQUIRE_EQUAL(get_global()["active_sessions_amount"].as<int>(), 1);
-    BOOST_REQUIRE_EQUAL(get_game_state(0)["active_sessions_amount"].as<int>(), 1);
+    // just update stats
     BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["sessions_created"].as<int>(), 1);
 
     BOOST_REQUIRE_EQUAL(success(),
@@ -1067,10 +1078,8 @@ BOOST_FIXTURE_TEST_CASE(legacy_actions, casino_tester) try {
     );
 
     // newsession is just a stub
-    const auto game_state = get_game_state(0);
-    const auto global_state = get_global();
-    BOOST_REQUIRE_EQUAL(global_state["active_sessions_amount"].as<int>(), 0);
-    BOOST_REQUIRE_EQUAL(game_state["active_sessions_amount"].as<int>(), 0);
+    BOOST_REQUIRE_EQUAL(get_global()["active_sessions_amount"].as<int>(), 1);
+    BOOST_REQUIRE_EQUAL(get_game_state(0)["active_sessions_amount"].as<int>(), 1);
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
