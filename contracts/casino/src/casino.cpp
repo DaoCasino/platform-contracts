@@ -161,15 +161,13 @@ void casino::session_close(name game_account, asset quantity) {
 }
 
 void casino::on_new_session(name game_account) {
-    // just a stub
-}
-
-void casino::on_new_session_player(name game_account, name player_account) {
     require_auth(game_account);
     const auto game_id = get_game_id(game_account);
     verify_game(game_id);
-
     session_update_amount(game_id);
+}
+
+void casino::on_new_session_player(name game_account, name player_account) {
     // player stats
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
