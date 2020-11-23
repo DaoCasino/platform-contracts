@@ -333,6 +333,17 @@ private:
             });
         }
     }
+
+    void reward_game_developer(uint64_t game_id) {
+        const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
+        const auto to_transfer = get_balance(game_id);
+        if (to_transfer <= zero_asset) {
+            return;
+        }
+        transfer(beneficiary, to_transfer, "game developer profits");
+        sub_balance(game_id, to_transfer);
+        update_last_claim_time(game_id);
+    }
 };
 
 const asset casino::zero_asset = asset(0, casino::core_symbol);

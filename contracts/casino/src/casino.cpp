@@ -59,6 +59,7 @@ void casino::remove_game(uint64_t game_id) {
     require_auth(get_owner());
     const auto game_itr = games.require_find(game_id, "the game was not added");
     const auto game_state_itr = game_state.require_find(game_id, "game is not in game state");
+    check(game_itr->paused, "trying to remove a unpaused game");
     check(!game_state_itr->active_sessions_amount, "trying to remove a game with non-zero active sessions");
     game_state.erase(game_state_itr);
     games.erase(game_itr);
@@ -100,12 +101,7 @@ void casino::claim_profit(name game_account) {
     const auto ct = current_time_point();
     const auto game_id = get_game_id(game_account);
     check(ct - get_last_claim_time(game_id) > microseconds(useconds_per_month), "already claimed within past month");
-    const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
-    const auto to_transfer = get_balance(game_id);
-    check(to_transfer > zero_asset, "cannot claim a negative profit");
-    transfer(beneficiary, to_transfer, "game developer profits");
-    sub_balance(game_id, to_transfer);
-    update_last_claim_time(game_id);
+    reward_game_developer(game_id);
 }
 
 uint64_t casino::get_game_id(name game_account) {
@@ -201,6 +197,14 @@ void casino::pause_game(uint64_t game_id, bool pause) {
 
     const auto game_itr = games.require_find(game_id, "game not found");
     const auto game_state_itr = game_state.require_find(game_id, "game not found");
+
+    if (pause) {
+        reward_game_developer(game_id);
+    } else {
+        game_state.modify(game_state_itr, get_self(), [&](auto& row) {
+            row.last_claim_time = current_time_point();
+        });
+    }
 
     games.modify(game_itr, get_self(), [&](auto& row) {
         row.paused = pause;

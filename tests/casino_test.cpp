@@ -176,6 +176,13 @@ BOOST_FIXTURE_TEST_CASE(remove_game, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(pausegame), casino_account, mvo()
+            ("game_id", 0)
+            ("pause", true)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
         push_action(casino_account, N(rmgame), casino_account, mvo()
             ("game_id", 0)
         )
@@ -213,6 +220,13 @@ BOOST_FIXTURE_TEST_CASE(remove_game_active_session_failure, casino_tester) try {
         push_action(casino_account, N(newsessionpl), casino_account, mvo()
             ("game_account", casino_account)
             ("player_account", player_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(pausegame), casino_account, mvo()
+            ("game_id", 0)
+            ("pause", true)
         )
     );
 
@@ -529,6 +543,64 @@ BOOST_FIXTURE_TEST_CASE(claim_profit, casino_tester) try {
             ("game_account", game_account)
         )
     );
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(claim_profit_on_pause, casino_tester) try {
+    name game_account = N(game.boy);
+    name game_beneficiary_account = N(din.don);
+
+    create_accounts({
+        game_account,
+        game_beneficiary_account
+    });
+    transfer(config::system_account_name, game_account, STRSYM("3.0000"));
+    transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", game_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(setmargin), platform_name, mvo()
+            ("id", 0)
+            ("profit_margin", 50)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(setbenefic), platform_name, mvo()
+            ("id", 0)
+            ("beneficiary", game_beneficiary_account)
+        )
+    );
+
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", game_params_type{{0, 0}})
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        transfer(game_account, casino_account, STRSYM("3.0000"))
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(pausegame), casino_account, mvo()
+            ("game_id", 0)
+            ("pause", true)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_game_balance(0), STRSYM("0.0000"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("301.5000"));
+    BOOST_REQUIRE_EQUAL(get_balance(game_beneficiary_account), STRSYM("1.5000"));
+    BOOST_REQUIRE_EQUAL(get_balance(game_account), STRSYM("0.0000"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
