@@ -198,6 +198,9 @@ void casino::pause_game(uint64_t game_id, bool pause) {
     const auto game_itr = games.require_find(game_id, "game not found");
     const auto game_state_itr = game_state.require_find(game_id, "game not found");
 
+    if (pause == game_itr->paused) {
+        return;
+    }
     if (pause) {
         reward_game_developer(game_id);
     } else {
