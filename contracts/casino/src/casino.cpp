@@ -204,9 +204,7 @@ void casino::pause_game(uint64_t game_id, bool pause) {
     if (pause) {
         reward_game_developer(game_id);
     } else {
-        game_state.modify(game_state_itr, get_self(), [&](auto& row) {
-            row.last_claim_time = current_time_point();
-        });
+        update_last_claim_time(game_id);
     }
 
     games.modify(game_itr, get_self(), [&](auto& row) {
