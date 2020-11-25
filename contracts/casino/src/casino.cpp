@@ -12,7 +12,8 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     _bstate(_self, _self.value),
     bonus_balance(_self, _self.value),
     player_stats(_self, _self.value),
-    games_no_bonus(_self, _self.value) {
+    games_no_bonus(_self, _self.value),
+    tokens(_self, _self.value) {
 
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -305,6 +306,27 @@ void casino::remove_game_no_bonus(name game_account) {
     const auto it = games_no_bonus.require_find(game_id, "game is not restricted");
 
     games_no_bonus.erase(it);
+}
+
+void casino::add_token(std::string token_name) {
+    require_auth(get_self());
+    platform::read::verify_token(get_platform(), token_name);
+    tokens.emplace(get_self(), [&](auto& row) {
+        row.token_name = token_name;
+        row.paused = false;
+    });
+}
+
+void casino::remove_token(std::string token_name) {
+    require_auth(get_self());
+    tokens.erase(get_token_itr(token_name));
+}
+
+void casino::pause_token(std::string token_name, bool pause) {
+    require_auth(get_self());
+    tokens.modify(get_token_itr(token_name), get_self(), [&](auto& row) {
+        row.paused = pause;
+    });
 }
 
 } // namespace casino

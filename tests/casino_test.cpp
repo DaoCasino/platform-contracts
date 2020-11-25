@@ -7,6 +7,19 @@ using bytes = std::vector<char>;
 static constexpr int64_t seconds_per_day = 24 * 3600;
 static constexpr int64_t seconds_per_month = 30 * seconds_per_day;
 
+static uint64_t get_token_pk(const std::string& token_name) {
+    // https://github.com/EOSIO/eosio.cdt/blob/1ba675ef4fe6dedc9f57a9982d1227a098bcaba9/libraries/eosiolib/core/eosio/symbol.hpp
+    uint64_t value = 0;
+    for( auto itr = token_name.rbegin(); itr != token_name.rend(); ++itr ) {
+        if( *itr < 'A' || *itr > 'Z') {
+            throw std::logic_error("only uppercase letters allowed in symbol_code string");
+        }
+        value <<= 8;
+        value |= *itr;
+    }
+    return value;
+}
+
 class casino_tester : public basic_tester {
 public:
     static const account_name casino_account;
@@ -118,6 +131,12 @@ public:
     fc::variant get_game_no_bonus(uint64_t game_id) {
         vector<char> data = get_row_by_account(casino_account, casino_account, N(gamesnobon), game_id);
         return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("games_no_bonus_row", data, abi_serializer_max_time);
+    }
+
+    fc::variant get_token(std::string token_name) {
+        const uint64_t pk = get_token_pk(token_name);
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(token), pk);
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("token_row", data, abi_serializer_max_time);
     }
 };
 
@@ -1080,6 +1099,74 @@ BOOST_FIXTURE_TEST_CASE(legacy_actions, casino_tester) try {
     // newsession is just a stub
     BOOST_REQUIRE_EQUAL(get_global()["active_sessions_amount"].as<int>(), 1);
     BOOST_REQUIRE_EQUAL(get_game_state(0)["active_sessions_amount"].as<int>(), 1);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(token, casino_tester) try {
+    const name token_eth = N(token.eth);
+    const name token_btc = N(token.btc);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addtoken), platform_name, mvo()
+            ("token_name", "DETH")
+            ("contract", token_eth)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(addtoken), casino_account, mvo()
+            ("token_name", "EOS")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addtoken), casino_account, mvo()
+            ("token_name", "DETH")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_token("DETH")["token_name"].as<std::string>(), "DETH");
+    BOOST_REQUIRE_EQUAL(get_token("DETH")["paused"].as<bool>(), false);
+
+    // test pause
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(pausetoken), casino_account, mvo()
+            ("token_name", "DETH")
+            ("pause", true)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_token("DETH")["paused"].as<bool>(), true);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(pausetoken), casino_account, mvo()
+            ("token_name", "DETH")
+            ("pause", false)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_token("DETH")["paused"].as<bool>(), false);
+
+    // test error messages
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(rmtoken), casino_account, mvo()
+            ("token_name", "DETH")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not supported"),
+        push_action(casino_account, N(rmtoken), casino_account, mvo()
+            ("token_name", "DETH")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not supported"),
+        push_action(casino_account, N(pausetoken), casino_account, mvo()
+            ("token_name", "DETH")
+            ("pause", false)
+        )
+    );
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

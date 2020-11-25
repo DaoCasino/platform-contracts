@@ -96,6 +96,15 @@ struct [[eosio::table("gamesnobon"), eosio::contract("casino")]] games_no_bonus_
 
 using games_no_bonus_table = eosio::multi_index<"gamesnobon"_n, games_no_bonus_row>;
 
+struct [[eosio::table("token"), eosio::contract("casino")]] token_row {
+    std::string token_name;
+    bool paused;
+
+    uint64_t primary_key() const { return platform::get_token_pk(token_name); }
+};
+
+using token_table = eosio::multi_index<"token"_n, token_row>;
+
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -180,6 +189,17 @@ public:
     void remove_game_no_bonus(name game_account); // rm game from bonus restricted games table
 
     // ==========================
+    // token
+    [[eosio::action("addtoken")]]
+    void add_token(std::string token_name);
+
+    [[eosio::action("rmtoken")]]
+    void remove_token(std::string token_name);
+
+    [[eosio::action("pausetoken")]]
+    void pause_token(std::string token_name, bool pause);
+
+    // ==========================
     // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
@@ -208,6 +228,8 @@ private:
     player_stats_table player_stats;
 
     games_no_bonus_table games_no_bonus;
+
+    token_table tokens;
 
     name get_owner() const {
         return gstate.owner;
@@ -332,6 +354,10 @@ private:
                 row.balance += amount;
             });
         }
+    }
+
+    token_table::const_iterator get_token_itr(const std::string& token_name) {
+        return tokens.require_find(platform::get_token_pk(token_name), "token is not supported");
     }
 };
 
