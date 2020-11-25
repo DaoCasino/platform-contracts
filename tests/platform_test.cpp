@@ -1,10 +1,21 @@
 #include "basic_tester.hpp"
 
-
 namespace testing {
 
 using bytes = std::vector<char>;
 
+static uint64_t get_token_pk(const std::string& token_name) {
+    // https://github.com/EOSIO/eosio.cdt/blob/1ba675ef4fe6dedc9f57a9982d1227a098bcaba9/libraries/eosiolib/core/eosio/symbol.hpp
+    uint64_t value = 0;
+    for( auto itr = token_name.rbegin(); itr != token_name.rend(); ++itr ) {
+        if( *itr < 'A' || *itr > 'Z') {
+            throw std::logic_error("only uppercase letters allowed in symbol_code string");
+        }
+        value <<= 8;
+        value |= *itr;
+    }
+    return value;
+}
 
 class platform_tester : public basic_tester {
 public:
@@ -29,6 +40,12 @@ public:
     fc::variant get_game(uint64_t game_id) {
         vector<char> data = get_row_by_account(platform_name, platform_name, N(game), game_id );
         return data.empty() ? fc::variant() : abi_ser[platform_name].binary_to_variant("game_row", data, abi_serializer_max_time);
+    }
+
+    fc::variant get_token(std::string token_name) {
+        const uint64_t pk = get_token_pk(token_name);
+        vector<char> data = get_row_by_account(platform_name, platform_name, N(token), pk);
+        return data.empty() ? fc::variant() : abi_ser[platform_name].binary_to_variant("token_row", data, abi_serializer_max_time);
     }
 };
 
@@ -441,6 +458,48 @@ BOOST_FIXTURE_TEST_CASE(game_id_auto_increment_test, platform_tester) try {
         BOOST_REQUIRE_EQUAL(game.is_null(), false);
         BOOST_REQUIRE_EQUAL(game["id"].as<uint64_t>(), i);
     }
+
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(add_del_token, platform_tester) try {
+    const name token_eth = N(token.eth);
+    const name token_btc = N(token.btc);
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("only uppercase letters allowed in symbol_code string"),
+        push_action(platform_name, N(addtoken), platform_name, mvo()
+            ("token_name", "dETH")
+            ("contract", token_eth)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addtoken), platform_name, mvo()
+            ("token_name", "DETH")
+            ("contract", token_eth)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addtoken), platform_name, mvo()
+            ("token_name", "DBTC")
+            ("contract", token_btc)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_token("DETH")["token_name"].as<std::string>(), "DETH");
+    BOOST_REQUIRE_EQUAL(get_token("DETH")["contract"].as<name>(), token_eth);
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(deltoken), platform_name, mvo()
+            ("token_name", "DETH")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("del token: no token found"),
+        push_action(platform_name, N(deltoken), platform_name, mvo()
+            ("token_name", "DETH")
+        )
+    );
 
 } FC_LOG_AND_RETHROW()
 
