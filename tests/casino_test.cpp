@@ -23,6 +23,7 @@ static uint64_t get_token_pk(const std::string& token_name) {
 class casino_tester : public basic_tester {
 public:
     static const account_name casino_account;
+    static const account_name core_token;
 
     casino_tester() {
         create_accounts({
@@ -41,6 +42,14 @@ public:
 
         set_authority(platform_name, N(gameaction), {get_public_key(platform_name, "gameaction")}, N(active));
         link_authority(platform_name, casino_account, N(gameaction), N(newplayer));
+
+        push_action(platform_name, N(addtoken), platform_name, mvo()
+            ("token_name", CORE_SYM_NAME)
+            ("contract", core_token)
+        );
+        push_action(casino_account, N(addtoken), casino_account, mvo()
+            ("token_name", CORE_SYM_NAME)
+        );
     }
 
     fc::variant get_game(uint64_t game_id) {
@@ -141,6 +150,7 @@ public:
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
+const account_name casino_tester::core_token = N(token.bet);
 
 using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
 

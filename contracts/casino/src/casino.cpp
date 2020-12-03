@@ -13,8 +13,11 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     bonus_balance(_self, _self.value),
     player_stats(_self, _self.value),
     games_no_bonus(_self, _self.value),
-    tokens(_self, _self.value) {
-
+    tokens(_self, _self.value),
+    game_tokens(_self, _self.value),
+    _gtokens(_self, _self.value),
+    player_tokens(_self, _self.value) {
+    
     version.set(version_row {CONTRACT_VERSION}, _self);
 
     gstate = _gstate.get_or_create(_self, global_state{
@@ -30,6 +33,13 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
         _self,
         zero_asset,
         zero_asset
+    });
+
+    gtokens = _gtokens.get_or_create(_self, global_tokens_state{
+        {},
+        {},
+        {},
+        {}
     });
 }
 
@@ -54,13 +64,21 @@ void casino::add_game(uint64_t game_id, game_params_type params) {
         row.active_sessions_amount = 0;
         row.active_sessions_sum = zero_asset;
     });
+
+    game_tokens.emplace(get_self(), [&](auto& row) {
+        row.game_id = game_id;
+        row.balance = {};
+        row.active_sessions_sum = {};
+    });
 }
 
 void casino::remove_game(uint64_t game_id) {
     require_auth(get_owner());
     const auto game_itr = games.require_find(game_id, "the game was not added");
     const auto game_state_itr = game_state.require_find(game_id, "game is not in game state");
+    const auto game_tokens_itr = game_tokens.require_find(game_id, "game is not in game tokens");
     check(!game_state_itr->active_sessions_amount, "trying to remove a game with non-zero active sessions");
+    game_tokens.erase(game_tokens_itr);
     game_state.erase(game_state_itr);
     games.erase(game_itr);
 }
@@ -72,12 +90,17 @@ void casino::set_owner(name new_owner) {
     gstate.owner = new_owner;
 }
 
-void casino::on_transfer(name game_account, name casino_account, eosio::asset quantity, std::string memo) {
+void casino::on_transfer(name game_account, name casino_account, asset quantity, std::string memo) {
     if (game_account == get_self() || casino_account != get_self()) {
         return;
     }
     if (memo == "bonus") {
-        bstate.total_allocated += quantity;
+        verify_asset(quantity);
+        const auto symbol_raw = quantity.symbol.raw();
+        if (quantity.symbol == core_symbol) {
+            bstate.total_allocated += quantity;
+        }
+        gtokens.total_allocated_bonus[symbol_raw] += quantity.amount;
         return;
     }
     platform::game_table platform_games(get_platform(), get_platform().value);
@@ -89,7 +112,7 @@ void casino::on_transfer(name game_account, name casino_account, eosio::asset qu
     }
 }
 
-void casino::on_loss(name game_account, name player_account, eosio::asset quantity) {
+void casino::on_loss(name game_account, name player_account, asset quantity) {
     require_auth(game_account);
     check(is_account(player_account), "to account does not exist");
     const auto game_id = get_game_id(game_account);
@@ -102,10 +125,12 @@ void casino::claim_profit(name game_account) {
     const auto game_id = get_game_id(game_account);
     check(ct - get_last_claim_time(game_id) > microseconds(useconds_per_month), "already claimed within past month");
     const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
-    const auto to_transfer = get_balance(game_id);
-    check(to_transfer > zero_asset, "cannot claim a negative profit");
-    transfer(beneficiary, to_transfer, "game developer profits");
-    sub_balance(game_id, to_transfer);
+    for (auto it = tokens.begin(); it != tokens.end(); it++) {
+        const auto to_transfer = get_balance(game_id, it->token_name);
+        check(to_transfer.amount > 0, "cannot claim a negative profit");
+        transfer(beneficiary, to_transfer, "game developer profits");
+        sub_balance(game_id, to_transfer);
+    }
     update_last_claim_time(game_id);
 }
 
@@ -128,6 +153,13 @@ void casino::verify_from_game_account(name game_account) {
 void casino::greet_new_player(name player_account) {
     check_from_platform_game();
     create_or_update_bonus_balance(player_account, bstate.greeting_bonus);
+};
+
+void casino::greet_new_player_token(name player_account, const std::string& token) {
+    check_from_platform_game();
+    const auto symbol = eosio::symbol(token, precision);
+    const auto greeting_bonus = asset(gtokens.greeting_bonus[symbol.raw()], symbol);
+    create_or_update_bonus_balance(player_account, greeting_bonus);
 };
 
 void casino::withdraw(name beneficiary_account, asset quantity) {
