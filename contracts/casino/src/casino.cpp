@@ -96,11 +96,10 @@ void casino::on_transfer(name game_account, name casino_account, asset quantity,
     }
     if (memo == "bonus") {
         verify_asset(quantity);
-        const auto symbol_raw = quantity.symbol.raw();
         if (quantity.symbol == core_symbol) {
             bstate.total_allocated += quantity;
         }
-        gtokens.total_allocated_bonus[symbol_raw] += quantity.amount;
+        gtokens.total_allocated_bonus[quantity.symbol.raw()] += quantity.amount;
         return;
     }
     platform::game_table platform_games(get_platform(), get_platform().value);
@@ -157,20 +156,22 @@ void casino::greet_new_player(name player_account) {
 
 void casino::greet_new_player_token(name player_account, const std::string& token) {
     check_from_platform_game();
-    const auto symbol = eosio::symbol(token, precision);
+    const auto symbol = eosio::symbol(token, core_precision);
     const auto greeting_bonus = asset(gtokens.greeting_bonus[symbol.raw()], symbol);
     create_or_update_bonus_balance(player_account, greeting_bonus);
 };
 
 void casino::withdraw(name beneficiary_account, asset quantity) {
+    verify_asset(quantity);
     require_auth(get_owner());
     const auto ct = current_time_point();
-    const auto account_balance = token::get_balance(_self, core_symbol) - bstate.total_allocated;
+    const auto symbol = quantity.symbol;
+    const auto account_balance = token::get_balance(_self, symbol) - asset(gtokens.total_allocated_bonus[symbol.raw()], symbol);
     // in case game developers screwed it up
-    const auto game_profits_sum = std::max(zero_asset, gstate.game_profits_sum);
-
-    if (account_balance > gstate.game_active_sessions_sum + game_profits_sum) {
-        const asset max_transfer = account_balance - gstate.game_active_sessions_sum - game_profits_sum;
+    const auto game_profits_sum = asset(std::max(0LL, gtokens.game_profits_sum[symbol.raw()]), symbol);
+    const auto game_active_sessions_sum = asset(gtokens.game_active_sessions_sum[symbol.raw()], symbol);
+    if (account_balance > game_active_sessions_sum + game_profits_sum) {
+        const asset max_transfer = account_balance - game_active_sessions_sum - game_profits_sum;
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
         transfer(beneficiary_account, quantity, "casino profits");
     } else {
@@ -213,19 +214,34 @@ void casino::on_new_depo_legacy(name game_account, asset quantity) {
 }
 
 void casino::on_new_depo(name game_account, name player_account, asset quantity) {
+    verify_asset(quantity);
     verify_from_game_account(game_account);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
         row.volume_real += quantity;
         row.profit_real -= quantity;
     });
+
+    const auto symbol_raw = quantity.symbol.raw();
+    const auto itr_tokens = get_or_create_player_tokens(player_account);
+    player_tokens.modify(itr_tokens, _self, [&](auto& row) {
+        row.volume_real[symbol_raw] += quantity.amount;
+        row.profit_real[symbol_raw] -= quantity.amount;
+    });
 }
 
 void casino::on_ses_payout(name game_account, name player_account, asset quantity) {
+    verify_asset(quantity);
     verify_from_game_account(game_account);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
         row.profit_real += quantity;
+    });
+
+    const auto symbol_raw = quantity.symbol.raw();
+    const auto itr_tokens = get_or_create_player_tokens(player_account);
+    player_tokens.modify(itr_tokens, _self, [&](auto& row) {
+        row.profit_real[symbol_raw] += quantity.amount;
     });
 }
 
@@ -251,15 +267,28 @@ void casino::set_bonus_admin(name new_admin) {
 }
 
 void casino::set_greeting_bonus(asset amount) {
+    verify_asset(amount);
     require_auth(bstate.admin);
-    bstate.greeting_bonus = amount;
+    if (amount.symbol == core_symbol) {
+        bstate.greeting_bonus = amount;
+    }
+    gtokens.greeting_bonus[amount.symbol.raw()] = amount.amount;    
 }
 
 void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {
+    verify_asset(quantity);
     require_auth(get_owner());
     check(memo.size() <= 256, "memo has more than 256 bytes");
-    check(quantity <= bstate.total_allocated, "withdraw quantity cannot exceed total bonus");
-    bstate.total_allocated -= quantity;
+    const auto symbol_raw = quantity.symbol.raw();
+    check(quantity.amount <= gtokens.total_allocated_bonus[symbol_raw], "withdraw quantity cannot exceed total bonus");
+
+    if (quantity.symbol == core_symbol) {
+        check(quantity <= bstate.total_allocated, "withdraw quantity cannot exceed total bonus");
+        bstate.total_allocated -= quantity;
+    }
+
+    gtokens.total_allocated_bonus[symbol_raw] -= quantity.amount;
+
     transfer(to, quantity, memo);
 }
 
@@ -269,53 +298,92 @@ void casino::send_bonus(name to, asset amount) {
 }
 
 void casino::subtract_bonus(name from, asset amount) {
+    verify_asset(amount);
     require_auth(bstate.admin);
-    const auto itr = bonus_balance.require_find(from.value, "player has no bonus");
-    check(amount <= itr->balance, "subtract amount cannot exceed player's bonus balance");
-    bonus_balance.modify(itr, _self, [&](auto& row) {
-        row.balance -= amount;
+
+    if (amount.symbol == core_symbol) {
+        const auto itr = bonus_balance.require_find(from.value, "player has no bonus");
+        check(amount <= itr->balance, "subtract amount cannot exceed player's bonus balance");
+        bonus_balance.modify(itr, _self, [&](auto& row) {
+            row.balance -= amount;
+        });
+    }
+  
+    const auto itr_tokens = get_or_create_player_tokens(from);
+    const auto symbol_raw = amount.symbol.raw();
+    check(amount.amount <= itr_tokens->bonus_balance.at(symbol_raw), "subtract amount cannot exceed player's bonus balance");
+    player_tokens.modify(itr_tokens, _self, [&](auto& row) {
+        row.bonus_balance[symbol_raw] -= amount.amount;
     });
 }
 
+// only "BET" bonus token
 void casino::convert_bonus(name account, const std::string& memo) {
     require_auth(bstate.admin);
     check(memo.size() <= 256, "memo has more than 256 bytes");
     const auto row = bonus_balance.require_find(account.value, "player has no bonus");
+    const auto itr_tokens = get_or_create_player_tokens(account);
+    const auto symbol_raw = core_symbol.raw();
     check(row->balance <= bstate.total_allocated, "convert quantity cannot exceed total allocated");
+    check(itr_tokens->bonus_balance.at(symbol_raw) <= gtokens.total_allocated_bonus[symbol_raw],
+        "convert quantity cannot exceed total allocated");
     bstate.total_allocated -= row->balance;
-    transfer(account, row->balance, memo);
+    gtokens.total_allocated_bonus[symbol_raw] -= itr_tokens->bonus_balance.at(symbol_raw);
+    transfer(account, asset(itr_tokens->bonus_balance.at(symbol_raw), core_symbol), memo);
     bonus_balance.erase(row);
+    player_tokens.modify(itr_tokens, _self, [&](auto& row) {
+        row.bonus_balance[symbol_raw] = 0;
+    });
 }
 
 void casino::session_lock_bonus(name game_account, name player_account, asset amount) {
+    verify_asset(amount);
     verify_from_game_account(game_account);
-    const auto row = bonus_balance.require_find(player_account.value, "player has no bonus");
-    check(amount <= row->balance, "lock amount cannot exceed player's bonus balance");
     check(games_no_bonus.find(get_game_id(game_account)) == games_no_bonus.end(), "game is restricted to bonus");
-    bonus_balance.modify(row, _self, [&](auto& row) {
-        row.balance -= amount;
-    });
-    if (row->balance == zero_asset) {
-        bonus_balance.erase(row);
+
+    if (amount.symbol == core_symbol) {
+        const auto row = bonus_balance.require_find(player_account.value, "player has no bonus");
+        check(amount <= row->balance, "lock amount cannot exceed player's bonus balance");
+        bonus_balance.modify(row, _self, [&](auto& row) {
+            row.balance -= amount;
+        });
+        if (row->balance == zero_asset) {
+            bonus_balance.erase(row);
+        }
+
+        // when player makes a bet using bonuses (volume increases)
+        // his tokens are locked (assume he loses)
+        const auto player_stat = get_or_create_player_stat(player_account);
+        player_stats.modify(player_stat, _self, [&](auto& row) {
+            row.volume_bonus += amount;
+            row.profit_bonus -= amount;
+        });
     }
 
-    // when player makes a bet using bonuses (volume increases)
-    // his tokens are locked (assume he loses)
-    const auto player_stat = get_or_create_player_stat(player_account);
-    player_stats.modify(player_stat, _self, [&](auto& row) {
-        row.volume_bonus += amount;
-        row.profit_bonus -= amount;
+    const auto symbol_raw = amount.symbol.raw();
+    const auto itr = get_or_create_player_tokens(player_account);
+    check(amount.amount <= itr->bonus_balance.at(symbol_raw), "lock amount cannot exceed player's bonus balance");
+    player_tokens.modify(itr, _self, [&](auto& row) {
+        row.bonus_balance[symbol_raw] -= amount.amount;
+        row.volume_bonus[symbol_raw] += amount.amount;
+        row.profit_bonus[symbol_raw] -= amount.amount;
     });
 }
 
 void casino::session_add_bonus(name game_account, name account, asset amount) {
+    verify_asset(amount);
     verify_from_game_account(game_account);
-    const auto row = bonus_balance.find(account.value);
     create_or_update_bonus_balance(account, amount);
-
-    const auto player_stat = get_or_create_player_stat(account);
-    player_stats.modify(player_stat, _self, [&](auto& row) {
-        row.profit_bonus += amount;
+    if (amount.symbol == core_symbol) {
+        const auto player_stat = get_or_create_player_stat(account);
+        player_stats.modify(player_stat, _self, [&](auto& row) {
+            row.profit_bonus += amount;
+        });
+    }
+    
+    const auto itr = get_or_create_player_tokens(account);
+    player_tokens.modify(itr, _self, [&](auto& row) {
+        row.profit_bonus[amount.symbol.raw()] += amount.amount;
     });
 }
 
