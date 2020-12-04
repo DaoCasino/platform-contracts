@@ -162,8 +162,8 @@ void casino::greet_new_player_token(name player_account, const std::string& toke
 };
 
 void casino::withdraw(name beneficiary_account, asset quantity) {
-    verify_asset(quantity);
     require_auth(get_owner());
+    verify_asset(quantity);
     const auto ct = current_time_point();
     const auto symbol = quantity.symbol;
     const auto account_balance = token::get_balance(_self, symbol) - asset(gtokens.total_allocated_bonus[symbol.raw()], symbol);
@@ -214,8 +214,8 @@ void casino::on_new_depo_legacy(name game_account, asset quantity) {
 }
 
 void casino::on_new_depo(name game_account, name player_account, asset quantity) {
-    verify_asset(quantity);
     verify_from_game_account(game_account);
+    verify_asset(quantity);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
         row.volume_real += quantity;
@@ -231,8 +231,8 @@ void casino::on_new_depo(name game_account, name player_account, asset quantity)
 }
 
 void casino::on_ses_payout(name game_account, name player_account, asset quantity) {
-    verify_asset(quantity);
     verify_from_game_account(game_account);
+    verify_asset(quantity);
     const auto player_stat = get_or_create_player_stat(player_account);
     player_stats.modify(player_stat, _self, [&](auto& row) {
         row.profit_real += quantity;
@@ -267,8 +267,8 @@ void casino::set_bonus_admin(name new_admin) {
 }
 
 void casino::set_greeting_bonus(asset amount) {
-    verify_asset(amount);
     require_auth(bstate.admin);
+    verify_asset(amount);
     if (amount.symbol == core_symbol) {
         bstate.greeting_bonus = amount;
     }
@@ -276,8 +276,8 @@ void casino::set_greeting_bonus(asset amount) {
 }
 
 void casino::withdraw_bonus(name to, asset quantity, const std::string& memo) {
-    verify_asset(quantity);
     require_auth(get_owner());
+    verify_asset(quantity);
     check(memo.size() <= 256, "memo has more than 256 bytes");
     const auto symbol_raw = quantity.symbol.raw();
     check(quantity.amount <= gtokens.total_allocated_bonus[symbol_raw], "withdraw quantity cannot exceed total bonus");
@@ -298,8 +298,8 @@ void casino::send_bonus(name to, asset amount) {
 }
 
 void casino::subtract_bonus(name from, asset amount) {
-    verify_asset(amount);
     require_auth(bstate.admin);
+    verify_asset(amount);
 
     if (amount.symbol == core_symbol) {
         const auto itr = bonus_balance.require_find(from.value, "player has no bonus");
@@ -337,9 +337,9 @@ void casino::convert_bonus(name account, const std::string& memo) {
 }
 
 void casino::session_lock_bonus(name game_account, name player_account, asset amount) {
-    verify_asset(amount);
     verify_from_game_account(game_account);
     check(games_no_bonus.find(get_game_id(game_account)) == games_no_bonus.end(), "game is restricted to bonus");
+    verify_asset(amount);
 
     if (amount.symbol == core_symbol) {
         const auto row = bonus_balance.require_find(player_account.value, "player has no bonus");
@@ -371,8 +371,8 @@ void casino::session_lock_bonus(name game_account, name player_account, asset am
 }
 
 void casino::session_add_bonus(name game_account, name account, asset amount) {
-    verify_asset(amount);
     verify_from_game_account(game_account);
+    verify_asset(amount);
     create_or_update_bonus_balance(account, amount);
     if (amount.symbol == core_symbol) {
         const auto player_stat = get_or_create_player_stat(account);

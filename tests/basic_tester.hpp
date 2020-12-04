@@ -95,6 +95,9 @@ public:
         return base_tester::push_action( std::move(act), actor);
    }
 
+    asset asset_from_string(const std::string& s) {
+        return sym::from_string(s);
+    }
 public:
     std::map<account_name, abi_serializer> abi_ser;
 };

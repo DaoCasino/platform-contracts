@@ -281,7 +281,7 @@ private:
 
     asset get_balance(uint64_t game_id, const std::string& token) const {
         const auto itr = game_tokens.require_find(game_id, "game not found");
-        platform::read::verify_token(get_platform(), token);
+        verify_token(token);
         const auto symbol = eosio::symbol(eosio::symbol_code(token), core_precision);
         return asset(itr->balance.at(symbol.raw()), symbol);
     }
@@ -475,13 +475,18 @@ private:
         });
     }
 
-    token_table::const_iterator get_token_itr(const std::string& token_name) {
+    token_table::const_iterator get_token_itr(const std::string& token_name) const {
         return tokens.require_find(platform::get_token_pk(token_name), "token is not supported");
     }
 
-    void verify_asset(const asset& asset) {
-        const auto& token = asset.symbol.code().to_string();
+    void verify_token(const std::string& token) const {
         platform::read::verify_token(get_platform(), token);
+        check(!get_token_itr(token)->paused, "token is paused");
+    }
+
+    void verify_asset(const asset& asset) const {
+        const auto& token = asset.symbol.code().to_string();
+        verify_token(token);
         check(asset.symbol.precision() == core_precision, "incorrect asset precision");
     }
 };

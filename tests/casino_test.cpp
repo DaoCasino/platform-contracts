@@ -63,8 +63,18 @@ public:
     }
 
     asset get_game_balance(uint64_t game_id, symbol balance_symbol = symbol{CORE_SYM}) {
-        vector<char> data = get_row_by_account(casino_account, casino_account, N(gamestate), game_id );
-        return data.empty() ? asset(0, balance_symbol) : abi_ser[casino_account].binary_to_variant("game_state_row", data, abi_serializer_max_time)["balance"].as<asset>();
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(gametokens), game_id );
+        if (data.empty()) {
+            return asset(0LL, balance_symbol);
+        }
+        const auto balances = abi_ser[casino_account].binary_to_variant("game_tokens_row", data, abi_serializer_max_time)["balance"].as<vector<fc::variant>>();
+        auto amount = 0;
+        for (auto& it : balances) {
+            if (it["key"].as<uint64_t>() == balance_symbol.value()) {
+                amount = it["value"].as<int64_t>();
+            }
+        }
+        return asset(amount, balance_symbol);
     }
 
     asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
@@ -358,6 +368,10 @@ BOOST_FIXTURE_TEST_CASE(on_transfer_update_game_balance, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_game_balance(0), STRSYM("1.5000"));
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("303.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(game_account), STRSYM("0.0000"));
+
+    transfer(config::system_account_name, game_account, asset_from_string("3.0000 DETH"));
+    transfer(game_account, casino_account, asset_from_string("3.0000 DETH"));
+    // BOOST_REQUIRE_EQUAL(get_game_balance(0, symbol{string_to_symbol_c(4, "DETH")}), asset_from_string("1.5000 DETH"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(on_transfer_from_inactive_casino_game, casino_tester) try {
@@ -440,6 +454,16 @@ BOOST_FIXTURE_TEST_CASE(on_loss_update_game_balance, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(player_account), STRSYM("3.0000"));
     BOOST_REQUIRE_EQUAL(get_game_balance(0), STRSYM("-1.5000"));
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("2.0000"));
+
+    transfer(config::system_account_name, game_account, asset_from_string("3.0000 DETH"));
+    
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(onloss), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", asset_from_string("3.0000 DETH"))
+        )
+    );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(on_loss_from_nonexistent_casino_game, casino_tester) try {
