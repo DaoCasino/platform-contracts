@@ -1,5 +1,6 @@
 #include "basic_tester.hpp"
 
+
 namespace testing {
 
 using bytes = std::vector<char>;
@@ -42,14 +43,9 @@ public:
 
         set_authority(platform_name, N(gameaction), {get_public_key(platform_name, "gameaction")}, N(active));
         link_authority(platform_name, casino_account, N(gameaction), N(newplayer));
+        link_authority(platform_name, casino_account, N(gameaction), N(newplayer.t));
 
-        push_action(platform_name, N(addtoken), platform_name, mvo()
-            ("token_name", CORE_SYM_NAME)
-            ("contract", core_token)
-        );
-        push_action(casino_account, N(addtoken), casino_account, mvo()
-            ("token_name", CORE_SYM_NAME)
-        );
+        allow_token(CORE_SYM_NAME, CORE_SYM_PRECISION, core_token);
     }
 
     fc::variant get_game(uint64_t game_id) {
@@ -67,14 +63,8 @@ public:
         if (data.empty()) {
             return asset(0LL, balance_symbol);
         }
-        const auto balances = abi_ser[casino_account].binary_to_variant("game_tokens_row", data, abi_serializer_max_time)["balance"].as<vector<fc::variant>>();
-        auto amount = 0;
-        for (auto& it : balances) {
-            if (it["key"].as<uint64_t>() == balance_symbol.value()) {
-                amount = it["value"].as<int64_t>();
-            }
-        }
-        return asset(amount, balance_symbol);
+        const auto balances = abi_ser[casino_account].binary_to_variant("game_tokens_row", data, abi_serializer_max_time)["balance"];
+        return get_asset_from_map(balances, balance_symbol);
     }
 
     asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
@@ -92,6 +82,11 @@ public:
        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("global_state", data, abi_serializer_max_time);
    }
 
+   fc::variant get_global_tokens() {
+       vector<char> data = get_row_by_account(casino_account, casino_account, N(globaltokens), N(globaltokens) );
+       return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("global_tokens_state", data, abi_serializer_max_time);
+   }
+
    fc::variant get_bonus() {
        vector<char> data = get_row_by_account(casino_account, casino_account, N(bonuspool), N(bonuspool) );
        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("bonus_pool_state", data, abi_serializer_max_time);
@@ -105,6 +100,11 @@ public:
     fc::variant get_player_stats(name player) {
         vector<char> data = get_row_by_account(casino_account, casino_account, N(playerstats), player);
         return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("player_stats_row", data, abi_serializer_max_time);
+    }
+
+    fc::variant get_player_tokens(name player, symbol balance_symbol = symbol{CORE_SYM}) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(playertokens), player.value );
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("player_tokens_row", data, abi_serializer_max_time);
     }
 
     action_result push_action_custom_auth(const action_name& contract,
@@ -156,6 +156,39 @@ public:
         const uint64_t pk = get_token_pk(token_name);
         vector<char> data = get_row_by_account(casino_account, casino_account, N(token), pk);
         return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("token_row", data, abi_serializer_max_time);
+    }
+
+    asset get_asset_from_map(const fc::variant& data, symbol symbol) {
+        auto amount = 0;
+        for (auto& it : data.as<vector<fc::variant>>()) {
+            if (it["key"].as<uint64_t>() == symbol.value()) {
+                amount = it["value"].as<int64_t>();
+            }
+        }
+        return asset(amount, symbol);
+    }
+
+    time_point get_time_from_map(const fc::variant& data, symbol symbol) {
+        for (auto& it : data.as<vector<fc::variant>>()) {
+            if (it["key"].as<uint64_t>() == symbol.value()) {
+                return it["value"].as<time_point>();
+            }
+        }
+        throw std::runtime_error("symbol not found");
+    }
+
+    void allow_token(const std::string& token_name, uint8_t precision, name contract) {
+        symbol symb = symbol{string_to_symbol_c(precision, token_name.c_str())};
+        create_currency( N(eosio.token), config::system_account_name, asset(100000000000000, symb) );
+        issue(config::system_account_name, asset(1672708210000, symb) );
+
+        push_action(platform_name, N(addtoken), platform_name, mvo()
+            ("token_name", token_name)
+            ("contract", contract)
+        );
+        push_action(casino_account, N(addtoken), casino_account, mvo()
+            ("token_name", token_name)
+        );
     }
 };
 
@@ -369,9 +402,23 @@ BOOST_FIXTURE_TEST_CASE(on_transfer_update_game_balance, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("303.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(game_account), STRSYM("0.0000"));
 
-    transfer(config::system_account_name, game_account, asset_from_string("3.0000 DETH"));
-    transfer(game_account, casino_account, asset_from_string("3.0000 DETH"));
-    // BOOST_REQUIRE_EQUAL(get_game_balance(0, symbol{string_to_symbol_c(4, "DETH")}), asset_from_string("1.5000 DETH"));
+
+    // try to transfer custom token
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    create_currency( N(eosio.token), config::system_account_name, asset(100000000000, kek_symbol) );
+    issue(config::system_account_name, asset(5000000000, kek_symbol) );
+
+    transfer(config::system_account_name, game_account, asset_from_string("4.0000 KEK"));
+    transfer(game_account, casino_account, asset_from_string("3.0000 KEK"));
+
+    // casino account declines unallowed token transfers
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), asset_from_string("0.0000 KEK"));
+
+    allow_token("KEK", 4, N(token.kek));
+    transfer(game_account, casino_account, asset_from_string("3.0000 KEK"));
+
+    BOOST_REQUIRE_EQUAL(get_game_balance(0, kek_symbol), asset_from_string("1.5000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), asset_from_string("3.0000 KEK"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(on_transfer_from_inactive_casino_game, casino_tester) try {
@@ -454,16 +501,30 @@ BOOST_FIXTURE_TEST_CASE(on_loss_update_game_balance, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(player_account), STRSYM("3.0000"));
     BOOST_REQUIRE_EQUAL(get_game_balance(0), STRSYM("-1.5000"));
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("2.0000"));
-
-    transfer(config::system_account_name, game_account, asset_from_string("3.0000 DETH"));
     
     BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
         push_action(casino_account, N(onloss), game_account, mvo()
             ("game_account", game_account)
             ("player_account", player_account)
-            ("quantity", asset_from_string("3.0000 DETH"))
+            ("quantity", asset_from_string("3.0000 KEK"))
         )
     );
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, casino_account, asset_from_string("5.0000 KEK"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(onloss), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", asset_from_string("3.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_balance(player_account, kek_symbol), asset_from_string("3.0000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_game_balance(0, kek_symbol), asset_from_string("-1.5000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), asset_from_string("2.0000 KEK"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(on_loss_from_nonexistent_casino_game, casino_tester) try {
@@ -527,6 +588,11 @@ BOOST_FIXTURE_TEST_CASE(claim_profit, casino_tester) try {
     transfer(config::system_account_name, game_account, STRSYM("3.0000"));
     transfer(config::system_account_name, casino_account, STRSYM("300.0000"));
 
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, game_account, asset_from_string("3.0000 KEK"));
+    transfer(config::system_account_name, casino_account, asset_from_string("300.0000 KEK"));
+
     BOOST_REQUIRE_EQUAL(success(),
         push_action(platform_name, N(addgame), platform_name, mvo()
             ("contract", game_account)
@@ -561,6 +627,10 @@ BOOST_FIXTURE_TEST_CASE(claim_profit, casino_tester) try {
         transfer(game_account, casino_account, STRSYM("3.0000"))
     );
 
+    BOOST_REQUIRE_EQUAL(success(),
+        transfer(game_account, casino_account, asset_from_string("3.0000 KEK"))
+    );
+
     produce_block(fc::seconds(seconds_per_month + 1));
 
     BOOST_REQUIRE_EQUAL(success(),
@@ -573,6 +643,11 @@ BOOST_FIXTURE_TEST_CASE(claim_profit, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("301.5000"));
     BOOST_REQUIRE_EQUAL(get_balance(game_beneficiary_account), STRSYM("1.5000"));
     BOOST_REQUIRE_EQUAL(get_balance(game_account), STRSYM("0.0000"));
+
+    BOOST_REQUIRE_EQUAL(get_game_balance(0, kek_symbol), asset_from_string("0.0000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), asset_from_string("301.5000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_balance(game_beneficiary_account, kek_symbol), asset_from_string("1.5000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_balance(game_account, kek_symbol), asset_from_string("0.0000 KEK"));
 
     produce_block(fc::seconds(3));
     // second claim should fail
@@ -711,6 +786,105 @@ BOOST_FIXTURE_TEST_CASE(withdraw, casino_tester) try {
 
     BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account), STRSYM("295.0000"));
 
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", asset_from_string("1.0000 KEK"))
+        )
+    );
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, game_account, asset_from_string("100.0000 KEK"));
+    transfer(config::system_account_name, casino_account, asset_from_string("290.0000 KEK"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesupdate), game_account, mvo()
+            ("game_account", game_account)
+            ("max_win_delta", asset_from_string("10.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        transfer(game_account, casino_account, asset_from_string("10.0000 KEK"))
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_global_tokens()["game_active_sessions_sum"], kek_symbol), 
+        asset_from_string("10.0000 KEK")
+    );
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_global_tokens()["game_profits_sum"], kek_symbol), 
+        asset_from_string("5.0000 KEK")
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", asset_from_string("30.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), asset_from_string("270.0000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account, kek_symbol), asset_from_string("30.0000 KEK"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newsession), game_account, mvo()
+            ("game_account", game_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(newsessionpl), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesupdate), game_account, mvo()
+            ("game_account", game_account)
+            ("max_win_delta", asset_from_string("300.0000 KEK"))
+        )
+    );
+
+    // max transfer is 27 now
+
+    BOOST_REQUIRE_EQUAL(
+        wasm_assert_msg("quantity exceededs max transfer amount"),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", asset_from_string("30.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        wasm_assert_msg("already claimed within past week"),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", asset_from_string("20.0000 KEK"))
+        )
+    );
+
+    produce_block(fc::seconds(seconds_per_month + 1));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesclose), game_account, mvo()
+            ("game_account", game_account)
+            ("quantity", asset_from_string("310.0000 KEK"))
+        )
+    );
+
+    // claim all except game profits
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", asset_from_string("265.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_balance(casino_beneficiary_account, kek_symbol), asset_from_string("295.0000 KEK"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(withdraw_negative_profits, casino_tester) try {
@@ -767,6 +941,33 @@ BOOST_FIXTURE_TEST_CASE(withdraw_negative_profits, casino_tester) try {
         push_action(casino_account, N(withdraw), casino_account, mvo()
             ("beneficiary_account", casino_beneficiary_account)
             ("quantity", STRSYM("50.0000"))
+        )
+    );
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, casino_account, asset_from_string("100.0000 KEK"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(onloss), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", asset_from_string("50.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        wasm_assert_msg("quantity exceededs max transfer amount"),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", asset_from_string("75.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", casino_beneficiary_account)
+            ("quantity", asset_from_string("50.0000 KEK"))
         )
     );
 } FC_LOG_AND_RETHROW()
@@ -830,6 +1031,82 @@ BOOST_FIXTURE_TEST_CASE(bonus, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_bonus()["total_allocated"].as<asset>(), STRSYM("47.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(player), STRSYM("50.0000"));
     BOOST_REQUIRE_EQUAL(get_bonus_balance(player), STRSYM("0.0000"));
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+
+    transfer(config::system_account_name, casino_account, asset_from_string("100.0000 KEK"), "bonus");
+    
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_global_tokens()["total_allocated_bonus"], kek_symbol), 
+        asset_from_string("0.0000 KEK")
+    );
+
+    allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, casino_account, asset_from_string("1000.0000 KEK"));
+    transfer(config::system_account_name, casino_account, asset_from_string("100.0000 KEK"), "bonus");
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_global_tokens()["total_allocated_bonus"], kek_symbol), 
+        asset_from_string("100.0000 KEK")
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdrawbon), casino_account, mvo()
+            ("to", bonus_hunter)
+            ("quantity", asset_from_string("3.0000 KEK"))
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), asset_from_string("1097.0000 KEK"));
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_global_tokens()["total_allocated_bonus"], kek_symbol), 
+        asset_from_string("97.0000 KEK")
+    );
+    BOOST_REQUIRE_EQUAL(get_balance(bonus_hunter, kek_symbol), asset_from_string("3.0000 KEK"));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sendbon), bonus_admin, mvo()
+            ("to", player)
+            ("amount", asset_from_string("100.0000 KEK"))
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player)["bonus_balance"], kek_symbol), 
+        asset_from_string("100.0000 KEK")
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(subtractbon), bonus_admin, mvo()
+            ("from", player)
+            ("amount", asset_from_string("50.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player)["bonus_balance"], kek_symbol),
+        asset_from_string("50.0000 KEK")
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(convertbon.t), bonus_admin, mvo()
+            ("account", player)
+            ("symbol", kek_symbol)
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_global_tokens()["total_allocated_bonus"], kek_symbol), 
+        asset_from_string("47.0000 KEK")
+    );
+    BOOST_REQUIRE_EQUAL(get_balance(player, kek_symbol), asset_from_string("50.0000 KEK"));
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player)["bonus_balance"], kek_symbol), 
+        asset_from_string("0.0000 KEK")
+    );
 } FC_LOG_AND_RETHROW()
 
 
@@ -895,6 +1172,65 @@ BOOST_FIXTURE_TEST_CASE(ses_bonus_lock_add, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(get_bonus_balance(player_account), STRSYM("200.0000"));
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", asset_from_string("100.0000 KEK"))
+        )
+    );
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, game_account, asset_from_string("3.0000 KEK"));
+    transfer(config::system_account_name, casino_account, asset_from_string("300.0000 KEK"));
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("lock amount cannot exceed player's bonus balance"),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", asset_from_string("100.0000 KEK"))
+        )
+    );
+
+    transfer(config::system_account_name, casino_account, asset_from_string("100.0000 KEK"), "bonus");
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sendbon), casino_account, mvo()
+            ("to", player_account)
+            ("amount", asset_from_string("100.0000 KEK"))
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["bonus_balance"], kek_symbol), 
+        asset_from_string("100.0000 KEK")
+    );    
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", asset_from_string("100.0000 KEK"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["bonus_balance"], kek_symbol), 
+        asset_from_string("0.0000 KEK")
+    );  
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesaddbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", asset_from_string("200.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["bonus_balance"], kek_symbol), 
+        asset_from_string("200.0000 KEK")
+    );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(pool_withdraw, casino_tester) try {
@@ -933,6 +1269,55 @@ BOOST_FIXTURE_TEST_CASE(pool_withdraw, casino_tester) try {
     );
     BOOST_REQUIRE_EQUAL(get_balance(beneficiary), STRSYM("300.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(bonus_acc), STRSYM("100.0000"));
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", beneficiary)
+            ("quantity", asset_from_string("400.0000 KEK"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(withdrawbon), casino_account, mvo()
+            ("to", bonus_acc)
+            ("quantity", asset_from_string("200.0000 KEK"))
+            ("memo", "")
+        )
+    );
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, casino_account, asset_from_string("300.0000 KEK"));
+    transfer(config::system_account_name, casino_account, asset_from_string("100.0000 KEK"), "bonus");
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("quantity exceededs max transfer amount"),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", beneficiary)
+            ("quantity", asset_from_string("400.0000 KEK"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("withdraw quantity cannot exceed total bonus"),
+        push_action(casino_account, N(withdrawbon), casino_account, mvo()
+            ("to", bonus_acc)
+            ("quantity", asset_from_string("200.0000 KEK"))
+            ("memo", "")
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdraw), casino_account, mvo()
+            ("beneficiary_account", beneficiary)
+            ("quantity", asset_from_string("300.0000 KEK"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(withdrawbon), casino_account, mvo()
+            ("to", bonus_acc)
+            ("quantity", asset_from_string("100.0000 KEK"))
+            ("memo", "")
+        )
+    );
+    BOOST_REQUIRE_EQUAL(get_balance(beneficiary, kek_symbol), asset_from_string("300.0000 KEK"));
+    BOOST_REQUIRE_EQUAL(get_balance(bonus_acc, kek_symbol), asset_from_string("100.0000 KEK"));
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
@@ -1001,6 +1386,68 @@ BOOST_FIXTURE_TEST_CASE(player_stats, casino_tester) try {
     );
     BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["profit_bonus"].as<asset>(), STRSYM("-100.0000"));
     BOOST_REQUIRE_EQUAL(get_player_stats(player_account)["volume_bonus"].as<asset>(), STRSYM("100.0000"));
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(sesnewdepo2), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", asset_from_string("10.0000 KEK"))
+        )
+    );
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sesnewdepo2), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", asset_from_string("10.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["profit_real"], kek_symbol), 
+        asset_from_string("-10.0000 KEK")
+    );
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["volume_real"], kek_symbol), 
+        asset_from_string("10.0000 KEK")
+    );
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sespayout), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("quantity", asset_from_string("20.0000 KEK"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["profit_real"], kek_symbol), 
+        asset_from_string("10.0000 KEK")
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(sendbon), casino_account, mvo()
+            ("to", player_account)
+            ("amount", asset_from_string("200.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(seslockbon), game_account, mvo()
+            ("game_account", game_account)
+            ("player_account", player_account)
+            ("amount", asset_from_string("100.0000 KEK"))
+        )
+    );
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["profit_bonus"], kek_symbol), 
+        asset_from_string("-100.0000 KEK")
+    );
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player_account)["volume_bonus"], kek_symbol), 
+        asset_from_string("100.0000 KEK")
+    );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(add_new_player, casino_tester) try {
@@ -1020,6 +1467,33 @@ BOOST_FIXTURE_TEST_CASE(add_new_player, casino_tester) try {
     );
 
     BOOST_REQUIRE_EQUAL(get_bonus_balance(player), STRSYM("1.0000"));
+
+    BOOST_REQUIRE_EQUAL(wasm_assert_msg("token is not in the list"),
+        push_action(casino_account, N(setgreetbon), casino_account, mvo()
+            ("amount", asset_from_string("1.0000 KEK"))
+        )
+    );
+
+    symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
+    allow_token("KEK", 4, N(token.kek));
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(setgreetbon), casino_account, mvo()
+            ("amount", asset_from_string("1.0000 KEK"))
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action_custom_auth(casino_account, N(newplayer.t), {platform_name, N(gameaction)}, mvo()
+            ("player_account", player)
+            ("token", "KEK")
+        )
+    );
+    
+    BOOST_REQUIRE_EQUAL(
+        get_asset_from_map(get_player_tokens(player)["bonus_balance"], kek_symbol), 
+        asset_from_string("1.0000 KEK")
+    );
 } FC_LOG_AND_RETHROW()
 
 BOOST_FIXTURE_TEST_CASE(games_no_bonus, casino_tester) try {

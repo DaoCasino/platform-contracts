@@ -39,7 +39,8 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
         {},
         {},
         {},
-        {}
+        {},
+        {{core_symbol.raw(), current_time_point()}}
     });
 }
 
@@ -90,12 +91,12 @@ void casino::set_owner(name new_owner) {
     gstate.owner = new_owner;
 }
 
-void casino::on_transfer(name game_account, name casino_account, asset quantity, std::string memo) {
+void casino::on_transfer(name game_account, name casino_account, asset quantity, std::string memo) {    
     if (game_account == get_self() || casino_account != get_self()) {
         return;
     }
-    if (memo == "bonus") {
-        verify_asset(quantity);
+    verify_asset(quantity);
+    if (memo ==  "bonus") {
         if (quantity.symbol == core_symbol) {
             bstate.total_allocated += quantity;
         }
@@ -178,9 +179,10 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
         check(account_balance > game_profits_sum, "developer profits exceed account balance");
         const asset max_transfer = std::min(account_balance / 10, account_balance - game_profits_sum);
         check(quantity <= max_transfer, "quantity exceededs max transfer amount");
-        check(ct - gstate.last_withdraw_time > microseconds(useconds_per_week), "already claimed within past week");
+        check(ct - gtokens.last_withdraw_time[symbol.raw()] > microseconds(useconds_per_week), "already claimed within past week");
         transfer(beneficiary_account, quantity, "casino profits");
         gstate.last_withdraw_time = ct;
+        gtokens.last_withdraw_time[symbol.raw()] = ct;
     }
 }
 
@@ -216,11 +218,14 @@ void casino::on_new_depo_legacy(name game_account, asset quantity) {
 void casino::on_new_depo(name game_account, name player_account, asset quantity) {
     verify_from_game_account(game_account);
     verify_asset(quantity);
-    const auto player_stat = get_or_create_player_stat(player_account);
-    player_stats.modify(player_stat, _self, [&](auto& row) {
-        row.volume_real += quantity;
-        row.profit_real -= quantity;
-    });
+
+    if (quantity.symbol == core_symbol) {
+        const auto player_stat = get_or_create_player_stat(player_account);
+        player_stats.modify(player_stat, _self, [&](auto& row) {
+            row.volume_real += quantity;
+            row.profit_real -= quantity;
+        });
+    }
 
     const auto symbol_raw = quantity.symbol.raw();
     const auto itr_tokens = get_or_create_player_tokens(player_account);
@@ -233,10 +238,13 @@ void casino::on_new_depo(name game_account, name player_account, asset quantity)
 void casino::on_ses_payout(name game_account, name player_account, asset quantity) {
     verify_from_game_account(game_account);
     verify_asset(quantity);
-    const auto player_stat = get_or_create_player_stat(player_account);
-    player_stats.modify(player_stat, _self, [&](auto& row) {
-        row.profit_real += quantity;
-    });
+
+    if (quantity.symbol == core_symbol) {
+        const auto player_stat = get_or_create_player_stat(player_account);
+        player_stats.modify(player_stat, _self, [&](auto& row) {
+            row.profit_real += quantity;
+        });
+    }
 
     const auto symbol_raw = quantity.symbol.raw();
     const auto itr_tokens = get_or_create_player_tokens(player_account);
@@ -336,6 +344,28 @@ void casino::convert_bonus(name account, const std::string& memo) {
     });
 }
 
+void casino::convert_bonus_token(name account, symbol symbol, const std::string& memo) {
+    require_auth(bstate.admin);
+    check(memo.size() <= 256, "memo has more than 256 bytes");
+
+    if (symbol == core_symbol) {
+        const auto row = bonus_balance.require_find(account.value, "player has no bonus");
+        check(row->balance <= bstate.total_allocated, "convert quantity cannot exceed total allocated");
+        bstate.total_allocated -= row->balance;
+        bonus_balance.erase(row);
+    }
+
+    const auto itr_tokens = get_or_create_player_tokens(account);
+    const auto symbol_raw = symbol.raw();    
+    check(itr_tokens->bonus_balance.at(symbol_raw) <= gtokens.total_allocated_bonus[symbol_raw],
+        "convert quantity cannot exceed total allocated");
+    gtokens.total_allocated_bonus[symbol_raw] -= itr_tokens->bonus_balance.at(symbol_raw);
+    transfer(account, asset(itr_tokens->bonus_balance.at(symbol_raw), symbol), memo);
+    player_tokens.modify(itr_tokens, _self, [&](auto& row) {
+        row.bonus_balance[symbol_raw] = 0;
+    });
+}
+
 void casino::session_lock_bonus(name game_account, name player_account, asset amount) {
     verify_from_game_account(game_account);
     check(games_no_bonus.find(get_game_id(game_account)) == games_no_bonus.end(), "game is restricted to bonus");
@@ -415,6 +445,9 @@ void casino::add_token(std::string token_name) {
         row.token_name = token_name;
         row.paused = false;
     });
+
+    symbol symbol = eosio::symbol(token_name, core_precision);
+    gtokens.last_withdraw_time[symbol.raw()] = current_time_point();
 }
 
 void casino::remove_token(std::string token_name) {

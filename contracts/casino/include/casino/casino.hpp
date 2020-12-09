@@ -120,6 +120,8 @@ struct [[eosio::table("globaltokens"), eosio::contract("casino")]] global_tokens
     std::map<uint64_t, int64_t> game_profits_sum; // total sum of game developer profits
     std::map<uint64_t, int64_t> total_allocated_bonus; // quantity allocated for bonus pool
     std::map<uint64_t, int64_t> greeting_bonus; // bonus for new users
+
+    std::map<uint64_t, time_point> last_withdraw_time; // casino last withdraw time
 };
 
 using global_tokens_singleton = eosio::singleton<"globaltokens"_n, global_tokens_state>;
@@ -203,6 +205,9 @@ public:
     [[eosio::action("convertbon")]]
     void convert_bonus(name account, const std::string& memo);
 
+    [[eosio::action("convertbon.t")]]
+    void convert_bonus_token(name account, symbol symbol, const std::string& memo);
+
     // session
     [[eosio::action("seslockbon")]]
     void session_lock_bonus(name game_account, name player_account, asset amount); // locks player's bonus for current session
@@ -213,7 +218,7 @@ public:
     [[eosio::action("newplayer")]]
     void greet_new_player(name player_account); // called by platform on user sign up
 
-    [[eosio::action("newplayertok")]]
+    [[eosio::action("newplayer.t")]]
     void greet_new_player_token(name player_account, const std::string& token); // called by platform on user sign up
 
     [[eosio::action("setgreetbon")]]

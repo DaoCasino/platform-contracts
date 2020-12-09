@@ -42,10 +42,6 @@ public:
 
         produce_blocks( 100 );
         deploy_contract<contracts::system::token>(N(eosio.token));
-
-        symbol core_symbol = symbol{CORE_SYM};
-        create_currency( N(eosio.token), config::system_account_name, asset(100000000000000, core_symbol) );
-        issue(config::system_account_name, asset(1672708210000, core_symbol) );
     }
 
     template <typename Contract>
