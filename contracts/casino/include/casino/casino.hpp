@@ -356,7 +356,7 @@ private:
         }
     }
 
-    token_table::const_iterator get_token_itr(const std::string& token_name) {
+    token_table::const_iterator get_token_itr(const std::string& token_name) const {
         return tokens.require_find(platform::get_token_pk(token_name), "token is not supported");
     }
 };
