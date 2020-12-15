@@ -387,7 +387,7 @@ private:
         gstate.active_sessions_amount++;
     }
 
-    void session_close(uint64_t game_id, asset quantity) {
+    void session_close_internal(uint64_t game_id, asset quantity) {
         verify_asset(quantity);
         const auto symbol_raw = quantity.symbol.raw();
         const auto itr = game_state.require_find(game_id, "game not found");
@@ -509,6 +509,121 @@ namespace read {
         return global_state.get_or_default().active_sessions_amount;
     }
 } // ns read
+
+extern "C" { 
+    void apply( uint64_t receiver, uint64_t code, uint64_t action ) { 
+        if(action == "transfer"_n.value) {
+            bool ok = false;
+            global_state_singleton gstate(eosio::name(receiver), receiver);
+            platform::token_table tokens(gstate.get_or_default().platform, gstate.get_or_default().platform.value);
+            for (auto it = tokens.begin(); it != tokens.end(); it++) {
+                if (it->contract.value == code) {
+                    ok = true;
+                    break;
+                }
+            }
+            eosio::check(ok, "transfer from unallowed contract");
+            eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::on_transfer);
+        } else if (code == receiver) {
+            switch( action ) { 
+            case "setplatform"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::set_platform);
+                break;
+            case "addgame"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::add_game);
+                break;
+            case "rmgame"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::remove_game);
+                break;
+            case "setowner"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::set_owner);
+                break;
+            case "onloss"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::on_loss);
+                break;
+            case "claimprofit"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::claim_profit);
+                break;
+            case "withdraw"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::withdraw);
+                break;
+            case "sesupdate"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::session_update);
+                break;
+            case "sesclose"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::session_close);
+                break;
+            case "sesnewdepo"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::on_new_depo_legacy);
+                break;
+            case "sesnewdepo2"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::on_new_depo);
+                break;
+            case "sespayout"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::on_ses_payout);
+                break;
+            case "newsession"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::on_new_session);
+                break;
+            case "newsessionpl"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::on_new_session_player);
+                break;
+            case "pausegame"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::pause_game);
+                break;
+            case "setadminbon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::set_bonus_admin);
+                break;
+            case "withdrawbon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::withdraw_bonus);
+                break;
+            case "sendbon"_n.value:
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::send_bonus);
+                break;
+            case "subtractbon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::subtract_bonus);
+                break;
+            case "convertbon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::convert_bonus);
+                break;
+            case "convertbon.t"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::convert_bonus_token);
+                break;
+            case "seslockbon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::session_lock_bonus);
+                break;
+            case "sesaddbon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::session_add_bonus);
+                break;
+            case "newplayer"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::greet_new_player);
+                break;
+            case "newplayer.t"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::greet_new_player_token);
+                break;
+            case "setgreetbon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::set_greeting_bonus);
+                break;
+            case "addgamenobon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::add_game_no_bonus);
+                break;
+            case "rmgamenobon"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::remove_game_no_bonus);
+                break;
+            case "addtoken"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::add_token);
+                break;
+            case "rmtoken"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::remove_token);
+                break;
+            case "pausetoken"_n.value: 
+                eosio::execute_action(eosio::name(receiver), eosio::name(code), &casino::pause_token);
+                break;
+            }
+        }
+        eosio::eosio_exit(0);
+    } 
+} 
 
 } // namespace casino
 

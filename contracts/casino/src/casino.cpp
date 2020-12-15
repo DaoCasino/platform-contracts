@@ -193,7 +193,7 @@ void casino::session_update(name game_account, asset max_win_delta) {
 
 void casino::session_close(name game_account, asset quantity) {
     require_auth(game_account);
-    session_close(get_game_id(game_account), quantity);
+    session_close_internal(get_game_id(game_account), quantity);
 }
 
 void casino::on_new_session(name game_account) {
