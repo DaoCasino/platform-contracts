@@ -115,6 +115,8 @@ public:
     void add_game(uint64_t game_id, game_params_type params);
     [[eosio::action("rmgame")]]
     void remove_game(uint64_t game_id);
+    [[eosio::action("setgameparam")]]
+    void set_game_param(uint64_t game, game_params_type params);
     [[eosio::action("setowner")]]
     void set_owner(name new_owner);
     [[eosio::on_notify("eosio.token::transfer")]]
