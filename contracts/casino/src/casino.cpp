@@ -55,6 +55,14 @@ void casino::add_game(uint64_t game_id, game_params_type params) {
     });
 }
 
+void casino::set_game_param(uint64_t game_id, game_params_type params) {
+    require_auth(get_owner());
+    const auto itr = games.require_find(game_id, "id not in the games list");
+    games.modify(itr, get_self(), [&](auto& row) {
+        row.params = params;
+    });
+}
+
 void casino::remove_game(uint64_t game_id) {
     require_auth(get_owner());
     const auto game_itr = games.require_find(game_id, "the game was not added");
