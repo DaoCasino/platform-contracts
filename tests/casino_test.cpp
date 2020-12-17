@@ -24,6 +24,7 @@ static uint64_t get_token_pk(const std::string& token_name) {
 class casino_tester : public basic_tester {
 public:
     static const account_name casino_account;
+    static const account_name undefined_acc;
 
     casino_tester() {
         create_accounts({
@@ -67,29 +68,33 @@ public:
     }
 
     asset get_balance( const account_name& act, symbol balance_symbol = symbol{CORE_SYM} ) {
-      vector<char> data = get_row_by_account( N(eosio.token), act, N(accounts), account_name(balance_symbol.to_symbol_code().value) );
-      return data.empty() ? asset(0, balance_symbol) : abi_ser[N(eosio.token)].binary_to_variant("account", data, abi_serializer_max_time)["balance"].as<asset>();
-   }
+        name token_account = get_token_contract(balance_symbol);
+        if (token_account == undefined_acc) {
+            return asset(0, balance_symbol);
+        }
+        vector<char> data = get_row_by_account( token_account, act, N(accounts), account_name(balance_symbol.to_symbol_code().value) );
+        return data.empty() ? asset(0, balance_symbol) : abi_ser[token_account].binary_to_variant("account", data, abi_serializer_max_time)["balance"].as<asset>();
+    }
 
-   fc::variant get_session_state(uint64_t ses_id) {
-       vector<char> data = get_row_by_account(casino_account, casino_account, N(sessionstate), ses_id );
-       return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("session_state_row", data, abi_serializer_max_time);
-   }
+    fc::variant get_session_state(uint64_t ses_id) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(sessionstate), ses_id );
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("session_state_row", data, abi_serializer_max_time);
+    }
 
-   fc::variant get_global() {
-       vector<char> data = get_row_by_account(casino_account, casino_account, N(global), N(global) );
-       return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("global_state", data, abi_serializer_max_time);
-   }
+    fc::variant get_global() {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(global), N(global) );
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("global_state", data, abi_serializer_max_time);
+    }
 
-   fc::variant get_global_tokens() {
-       vector<char> data = get_row_by_account(casino_account, casino_account, N(globaltokens), N(globaltokens) );
-       return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("global_tokens_state", data, abi_serializer_max_time);
-   }
+    fc::variant get_global_tokens() {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(globaltokens), N(globaltokens) );
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("global_tokens_state", data, abi_serializer_max_time);
+    }
 
-   fc::variant get_bonus() {
-       vector<char> data = get_row_by_account(casino_account, casino_account, N(bonuspool), N(bonuspool) );
-       return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("bonus_pool_state", data, abi_serializer_max_time);
-   }
+    fc::variant get_bonus() {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(bonuspool), N(bonuspool) );
+        return data.empty() ? fc::variant() : abi_ser[casino_account].binary_to_variant("bonus_pool_state", data, abi_serializer_max_time);
+    }
 
     asset get_bonus_balance(name player) {
         vector<char> data = get_row_by_account(casino_account, casino_account, N(bonusbalance), player.value);
@@ -177,9 +182,12 @@ public:
     }
 
     void allow_token(const std::string& token_name, uint8_t precision, name contract) {
+        create_account(contract);
+        deploy_contract<contracts::system::token>(contract);
+
         symbol symb = symbol{string_to_symbol_c(precision, token_name.c_str())};
-        create_currency( N(eosio.token), config::system_account_name, asset(100000000000000, symb) );
-        issue(config::system_account_name, asset(1672708210000, symb) );
+        create_currency( contract, config::system_account_name, asset(100000000000000, symb) );
+        issue( config::system_account_name, asset(1672708210000, symb), config::system_account_name, contract );
 
         push_action(platform_name, N(addtoken), platform_name, mvo()
             ("token_name", token_name)
@@ -189,9 +197,27 @@ public:
             ("token_name", token_name)
         );
     }
+
+    name get_token_contract(const symbol symbol) {
+        vector<char> data = get_row_by_account( platform_name, platform_name, N(token), symbol.to_symbol_code().value );
+        return data.empty() ? undefined_acc : abi_ser[platform_name].binary_to_variant("token_row", data, abi_serializer_max_time)["contract"].as<name>();
+    }
+
+    action_result transfer( const name& from, const name& to, const asset& amount, const std::string& memo = "") {
+        name token_contract = get_token_contract(amount.get_symbol());
+        if (token_contract == undefined_acc) {
+            return wasm_assert_msg("token is not in the list");
+        }
+        return push_action( token_contract, N(transfer), from, mutable_variant_object()
+                                ("from",     from)
+                                ("to",       to)
+                                ("quantity", amount)
+                                ("memo",     memo) );
+    }
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
+const account_name casino_tester::undefined_acc = N(undefined);
 
 using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
 
@@ -400,19 +426,9 @@ BOOST_FIXTURE_TEST_CASE(on_transfer_update_game_balance, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_account), STRSYM("303.0000"));
     BOOST_REQUIRE_EQUAL(get_balance(game_account), STRSYM("0.0000"));
 
-
-    // try to transfer custom token
     symbol kek_symbol = symbol{string_to_symbol_c(4, "KEK")};
-    create_currency( N(eosio.token), config::system_account_name, asset(100000000000, kek_symbol) );
-    issue(config::system_account_name, asset(5000000000, kek_symbol) );
-
-    transfer(config::system_account_name, game_account, asset_from_string("4.0000 KEK"));
-    transfer(game_account, casino_account, asset_from_string("3.0000 KEK"));
-
-    // casino account declines unallowed token transfers
-    BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), asset_from_string("0.0000 KEK"));
-
     allow_token("KEK", 4, N(token.kek));
+    transfer(config::system_account_name, game_account, asset_from_string("3.0000 KEK"));
     transfer(game_account, casino_account, asset_from_string("3.0000 KEK"));
 
     BOOST_REQUIRE_EQUAL(get_game_balance(0, kek_symbol), asset_from_string("1.5000 KEK"));

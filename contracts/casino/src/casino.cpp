@@ -95,6 +95,9 @@ void casino::on_transfer(name game_account, name casino_account, asset quantity,
     if (game_account == get_self() || casino_account != get_self()) {
         return;
     }
+    platform::token_table tokens(get_platform(), get_platform().value);
+    auto token_it = tokens.require_find(quantity.symbol.code().raw(), "token is not in the list");
+    check(token_it->contract == get_first_receiver(), "transfer from incorrect contract");
     verify_asset(quantity);
     if (memo ==  "bonus") {
         if (quantity.symbol == core_symbol) {
@@ -167,7 +170,7 @@ void casino::withdraw(name beneficiary_account, asset quantity) {
     verify_asset(quantity);
     const auto ct = current_time_point();
     const auto symbol = quantity.symbol;
-    const auto account_balance = token::get_balance(_self, symbol) - asset(gtokens.total_allocated_bonus[symbol.raw()], symbol);
+    const auto account_balance = token::get_balance(get_platform(), _self, symbol) - asset(gtokens.total_allocated_bonus[symbol.raw()], symbol);
     // in case game developers screwed it up
     const auto game_profits_sum = asset(std::max(0LL, gtokens.game_profits_sum[symbol.raw()]), symbol);
     const auto game_active_sessions_sum = asset(gtokens.game_active_sessions_sum[symbol.raw()], symbol);
