@@ -160,7 +160,7 @@ void casino::greet_new_player(name player_account) {
 
 void casino::greet_new_player_token(name player_account, const std::string& token) {
     check_from_platform_game();
-    const auto symbol = eosio::symbol(token, core_precision);
+    const auto symbol = token::get_symbol(get_platform(), token);
     const auto greeting_bonus = asset(gtokens.greeting_bonus[symbol.raw()], symbol);
     create_or_update_bonus_balance(player_account, greeting_bonus);
 };
@@ -449,7 +449,7 @@ void casino::add_token(std::string token_name) {
         row.paused = false;
     });
 
-    symbol symbol = eosio::symbol(token_name, core_precision);
+    const auto symbol = token::get_symbol(get_platform(), token_name);
     gtokens.last_withdraw_time[symbol.raw()] = current_time_point();
 }
 

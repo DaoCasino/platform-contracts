@@ -6,6 +6,30 @@
 #include <eosio/binary_extension.hpp>
 #include <platform/platform.hpp>
 
+namespace token {
+    struct account {
+        eosio::asset balance;
+        uint64_t primary_key() const { return balance.symbol.code().raw(); }
+    };
+
+    typedef eosio::multi_index<"accounts"_n, account> accounts;
+
+    eosio::asset get_balance(eosio::name platform, eosio::name account, eosio::symbol s) {
+        platform::token_table tokens(platform, platform.value);
+        auto it = tokens.require_find(s.code().raw(), "token is not in the list");
+        accounts accountstable(it->contract, account.value);
+        return accountstable.get(s.code().raw()).balance;
+    }
+
+    eosio::symbol get_symbol(eosio::name platform, const std::string& token) {
+        const auto sc = eosio::symbol_code(token);
+        platform::token_table tokens(platform, platform.value);
+        auto it = tokens.require_find(sc.raw(), "token is not in the list");
+        accounts accountstable(it->contract, "eosio"_n.value);
+        return accountstable.get(sc.raw()).balance.symbol;
+    }
+} // namespace token
+
 namespace casino {
 
 using eosio::name;
@@ -248,8 +272,7 @@ public:
     static constexpr int64_t useconds_per_week = 7 * useconds_per_day;
     static constexpr int64_t useconds_per_month = 30 * useconds_per_day;
 
-    static constexpr uint8_t core_precision = 4;
-    static constexpr symbol core_symbol = symbol(eosio::symbol_code("BET"), core_precision);
+    static constexpr symbol core_symbol = symbol(eosio::symbol_code("BET"), 4);
     static const asset zero_asset;
 
     static const int percent_100 = 100;
@@ -284,10 +307,10 @@ private:
 
     uint32_t get_profit_margin(uint64_t game_id) const;
 
-    asset get_balance(uint64_t game_id, const std::string& token) const {
+    asset get_balance(uint64_t game_id, const std::string& token_str) const {
         const auto itr = game_tokens.require_find(game_id, "game not found");
-        verify_token(token);
-        const auto symbol = eosio::symbol(eosio::symbol_code(token), core_precision);
+        verify_token(token_str);
+        const auto symbol = token::get_symbol(get_platform(), token_str);
         return asset(itr->balance.at(symbol.raw()), symbol);
     }
 
@@ -494,7 +517,8 @@ private:
     void verify_asset(const asset& asset) const {
         const auto& token = asset.symbol.code().to_string();
         verify_token(token);
-        check(asset.symbol.precision() == core_precision, "incorrect asset precision");
+        const auto symbol = token::get_symbol(get_platform(), token);
+        check(asset.symbol == symbol, "incorrect asset symbol");
     }
 };
 
@@ -513,19 +537,3 @@ namespace read {
 } // ns read
 
 } // namespace casino
-
-namespace token {
-    struct account {
-        eosio::asset balance;
-        uint64_t primary_key() const { return balance.symbol.raw(); }
-    };
-
-    typedef eosio::multi_index<"accounts"_n, account> accounts;
-
-    eosio::asset get_balance(eosio::name platform, eosio::name account, eosio::symbol s) {
-        platform::token_table tokens(platform, platform.value);
-        auto it = tokens.require_find(s.code().raw(), "token is not in the list");
-        accounts accountstable(it->contract, account.value);
-        return accountstable.get(s.code().raw()).balance;
-    }
-}
