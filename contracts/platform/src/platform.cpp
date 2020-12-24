@@ -8,7 +8,8 @@ platform::platform(name receiver, name code, eosio::datastream<const char*> ds):
     version(_self, _self.value),
     global(_self, _self.value),
     casinos(_self, _self.value),
-    games(_self, _self.value)
+    games(_self, _self.value),
+    tokens(_self, _self.value)
 {
     version.set(version_row {CONTRACT_VERSION}, _self);
 }
@@ -146,6 +147,19 @@ void platform::set_beneficiary_game(uint64_t id, name beneficiary) {
     games.modify(game_itr, get_self(), [&](auto& row) {
         row.beneficiary = beneficiary;
     });
+}
+
+void platform::add_token(std::string token_name, name contract) {
+    require_auth(get_self());
+    tokens.emplace(get_self(), [&](auto& row) {
+        row.token_name = token_name;
+        row.contract = contract;
+    });
+}
+
+void platform::del_token(std::string token_name) {
+    require_auth(get_self());
+    tokens.erase(tokens.require_find(get_token_pk(token_name), "del token: no token found"));
 }
 
 } // namespace platform

@@ -3,7 +3,6 @@
 #include <eosio/eosio.hpp>
 #include <eosio/singleton.hpp>
 
-
 namespace platform {
 
 
@@ -59,6 +58,30 @@ using game_table = eosio::multi_index<
                    >;
 
 
+static uint64_t get_token_pk(const std::string& token_name) {
+    // https://github.com/EOSIO/eosio.cdt/blob/1ba675ef4fe6dedc9f57a9982d1227a098bcaba9/libraries/eosiolib/core/eosio/symbol.hpp
+    uint64_t value = 0;
+    for( auto itr = token_name.rbegin(); itr != token_name.rend(); ++itr ) {
+        if( *itr < 'A' || *itr > 'Z') {
+            eosio::check( false, "only uppercase letters allowed in symbol_code string" );
+        }
+        value <<= 8;
+        value |= *itr;
+    }
+    return value;
+}
+
+struct [[eosio::table("token"), eosio::contract("platform")]] token_row {
+    std::string token_name;
+    name contract;
+
+    uint64_t primary_key() const {
+        return get_token_pk(token_name);
+    }
+};
+
+using token_table = eosio::multi_index<"token"_n, token_row>;
+
 class [[eosio::contract("platform")]] platform: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -108,11 +131,18 @@ public:
     [[eosio::action("setbenefic")]]
     void set_beneficiary_game(uint64_t id, name beneficiary);
 
+    [[eosio::action("addtoken")]]
+    void add_token(std::string token_name, name contract);
+
+    [[eosio::action("deltoken")]]
+    void del_token(std::string token_name);
+
 private:
     version_singleton version;
     global_singleton global;
     casino_table casinos;
     game_table games;
+    token_table tokens;
 };
 
 
@@ -163,6 +193,16 @@ static bool is_active_game(name platform_contract, uint64_t game_id) {
         return false;
     }
     return !(game_itr->paused);
+}
+
+static token_row get_token(name platform_contract, std::string token_name) {
+    token_table tokens(platform_contract, platform_contract.value);
+    return tokens.get(get_token_pk(token_name), "no token found");
+}
+
+static void verify_token(name platform_contract, std::string token_name) {
+    token_table tokens(platform_contract, platform_contract.value);
+    eosio::check(tokens.find(get_token_pk(token_name)) != tokens.end(), "token is not in the list");
 }
 
 } // namespace read

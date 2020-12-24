@@ -6,6 +6,30 @@
 #include <eosio/binary_extension.hpp>
 #include <platform/platform.hpp>
 
+namespace token {
+    struct account {
+        eosio::asset balance;
+        uint64_t primary_key() const { return balance.symbol.code().raw(); }
+    };
+
+    typedef eosio::multi_index<"accounts"_n, account> accounts;
+
+    eosio::asset get_balance(eosio::name platform, eosio::name account, eosio::symbol s) {
+        platform::token_table tokens(platform, platform.value);
+        auto it = tokens.require_find(s.code().raw(), "token is not in the list");
+        accounts accountstable(it->contract, account.value);
+        return accountstable.get(s.code().raw()).balance;
+    }
+
+    eosio::symbol get_symbol(eosio::name platform, const std::string& token) {
+        const auto sc = eosio::symbol_code(token);
+        platform::token_table tokens(platform, platform.value);
+        auto it = tokens.require_find(sc.raw(), "token is not in the list");
+        accounts accountstable(it->contract, "eosio"_n.value);
+        return accountstable.get(sc.raw()).balance.symbol;
+    }
+} // namespace token
+
 namespace casino {
 
 using eosio::name;
@@ -78,10 +102,10 @@ struct [[eosio::table("playerstats"), eosio::contract("casino")]] player_stats_r
     uint64_t sessions_created;
 
     asset volume_real; // volume bet using 'BET'
-    asset volume_bonus; // volume bet using bonus
+    asset volume_bonus; // volume bet using 'BET' bonus
 
     asset profit_real; // profit in 'BET'
-    asset profit_bonus; // profit in bonus
+    asset profit_bonus; // profit in 'BET' bonus
 
     uint64_t primary_key() const { return player.value; }
 };
@@ -96,6 +120,50 @@ struct [[eosio::table("gamesnobon"), eosio::contract("casino")]] games_no_bonus_
 
 using games_no_bonus_table = eosio::multi_index<"gamesnobon"_n, games_no_bonus_row>;
 
+struct [[eosio::table("token"), eosio::contract("casino")]] token_row {
+    std::string token_name;
+    bool paused;
+
+    uint64_t primary_key() const { return platform::get_token_pk(token_name); }
+};
+
+using token_table = eosio::multi_index<"token"_n, token_row>;
+
+struct [[eosio::table("gametokens"), eosio::contract("casino")]] game_tokens_row {
+    uint64_t game_id;
+    std::map<uint64_t, int64_t> balance; // game's balance aka not clamed profits
+    std::map<uint64_t, int64_t> active_sessions_sum; // sum of tokens between currently active sessions
+
+    uint64_t primary_key() const { return game_id; }
+};
+
+using game_tokens_table = eosio::multi_index<"gametokens"_n, game_tokens_row>;
+
+struct [[eosio::table("globaltokens"), eosio::contract("casino")]] global_tokens_state {
+    std::map<uint64_t, int64_t> game_active_sessions_sum; // total sum of currently active sessions between all games
+    std::map<uint64_t, int64_t> game_profits_sum; // total sum of game developer profits
+    std::map<uint64_t, int64_t> total_allocated_bonus; // quantity allocated for bonus pool
+    std::map<uint64_t, int64_t> greeting_bonus; // bonus for new users
+
+    std::map<uint64_t, time_point> last_withdraw_time; // casino last withdraw time
+};
+
+using global_tokens_singleton = eosio::singleton<"globaltokens"_n, global_tokens_state>;
+
+struct [[eosio::table("playertokens"), eosio::contract("casino")]] player_tokens_row {
+    name player;
+    
+    std::map<uint64_t, int64_t> bonus_balance;
+    std::map<uint64_t, int64_t> volume_real; // volume bet using 'BET'
+    std::map<uint64_t, int64_t> volume_bonus; // volume bet using bonus
+    std::map<uint64_t, int64_t> profit_real; // profit in 'BET'
+    std::map<uint64_t, int64_t> profit_bonus; // profit in bonus
+
+    uint64_t primary_key() const { return player.value; }
+};
+
+using player_tokens_table = eosio::multi_index<"playertokens"_n, player_tokens_row>;
+ 
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -105,6 +173,7 @@ public:
     ~casino() {
         _gstate.set(gstate, _self);
         _bstate.set(bstate, _self);
+        _gtokens.set(gtokens, _self);
     }
 
     // =================
@@ -119,7 +188,7 @@ public:
     void set_game_param(uint64_t game, game_params_type params);
     [[eosio::action("setowner")]]
     void set_owner(name new_owner);
-    [[eosio::on_notify("eosio.token::transfer")]]
+    [[eosio::on_notify("*::transfer")]]
     void on_transfer(name from, name to, eosio::asset quantity, std::string memo);
     [[eosio::action("onloss")]]
     void on_loss(name game_account, name player_account, eosio::asset quantity);
@@ -162,6 +231,9 @@ public:
     [[eosio::action("convertbon")]]
     void convert_bonus(name account, const std::string& memo);
 
+    [[eosio::action("convertbon.t")]]
+    void convert_bonus_token(name account, symbol symbol, const std::string& memo);
+
     // session
     [[eosio::action("seslockbon")]]
     void session_lock_bonus(name game_account, name player_account, asset amount); // locks player's bonus for current session
@@ -172,6 +244,9 @@ public:
     [[eosio::action("newplayer")]]
     void greet_new_player(name player_account); // called by platform on user sign up
 
+    [[eosio::action("newplayer.t")]]
+    void greet_new_player_token(name player_account, const std::string& token); // called by platform on user sign up
+
     [[eosio::action("setgreetbon")]]
     void set_greeting_bonus(asset amount);
     // games no bonus methods
@@ -180,6 +255,17 @@ public:
 
     [[eosio::action("rmgamenobon")]]
     void remove_game_no_bonus(name game_account); // rm game from bonus restricted games table
+
+    // ==========================
+    // token
+    [[eosio::action("addtoken")]]
+    void add_token(std::string token_name);
+
+    [[eosio::action("rmtoken")]]
+    void remove_token(std::string token_name);
+
+    [[eosio::action("pausetoken")]]
+    void pause_token(std::string token_name, bool pause);
 
     // ==========================
     // constants
@@ -211,31 +297,61 @@ private:
 
     games_no_bonus_table games_no_bonus;
 
+    token_table tokens;
+    game_tokens_table game_tokens;
+    global_tokens_singleton _gtokens;
+    global_tokens_state gtokens;
+    player_tokens_table player_tokens;
+
     name get_owner() const {
         return gstate.owner;
     }
 
     uint32_t get_profit_margin(uint64_t game_id) const;
 
-    asset get_balance(uint64_t game_id) const {
-        const auto itr = game_state.require_find(game_id, "game not found");
-        return itr->balance;
+    asset get_balance(uint64_t game_id, const std::string& token_str) const {
+        const auto itr = game_tokens.require_find(game_id, "game not found");
+        verify_token(token_str);
+        const auto symbol = token::get_symbol(get_platform(), token_str);
+        return asset(itr->balance.at(symbol.raw()), symbol);
     }
 
     void add_balance(uint64_t game_id, asset quantity) {
-        const auto itr = game_state.require_find(game_id, "game not found");
-        game_state.modify(itr, get_self(), [&](auto& row) {
-            row.balance += quantity;
+        verify_asset(quantity);
+        
+        if (quantity.symbol == core_symbol) {
+            const auto itr = game_state.require_find(game_id, "game not found");
+            game_state.modify(itr, get_self(), [&](auto& row) {
+                row.balance += quantity;
+            });
+            gstate.game_profits_sum += quantity;
+        }
+
+        const auto symbol_raw = quantity.symbol.raw();
+        const auto itr_tokens = game_tokens.require_find(game_id, "game not found");
+        game_tokens.modify(itr_tokens, get_self(), [&](auto& row) {
+            row.balance[symbol_raw] += quantity.amount;
         });
-        gstate.game_profits_sum += quantity;
+        gtokens.game_profits_sum[symbol_raw] += quantity.amount;
     }
 
     void sub_balance(uint64_t game_id, asset quantity) {
-        const auto itr = game_state.require_find(game_id, "game not found");
-        game_state.modify(itr, get_self(), [&](auto& row) {
-            row.balance -= quantity;
+        verify_asset(quantity);
+        
+        if (quantity.symbol == core_symbol) {
+            const auto itr = game_state.require_find(game_id, "game not found");
+            game_state.modify(itr, get_self(), [&](auto& row) {
+                row.balance -= quantity;
+            });
+            gstate.game_profits_sum -= quantity;
+        }
+
+        const auto symbol_raw = quantity.symbol.raw();
+        const auto itr_tokens = game_tokens.require_find(game_id, "game not found");
+        game_tokens.modify(itr_tokens, get_self(), [&](auto& row) {
+            row.balance[symbol_raw] -= quantity.amount;
         });
-        gstate.game_profits_sum -= quantity;
+        gtokens.game_profits_sum[symbol_raw] -= quantity.amount;
     }
 
     bool is_active_game(uint64_t game_id) const {
@@ -255,9 +371,13 @@ private:
     }
 
     void transfer(name to, asset quantity, std::string memo) {
+        verify_asset(quantity);
+        platform::token_table tokens(get_platform(), get_platform().value);
+        auto it = tokens.require_find(quantity.symbol.code().raw(), "token is not in the list");
+
         eosio::action(
             eosio::permission_level{_self, "active"_n},
-            "eosio.token"_n,
+            it->contract,
             "transfer"_n,
             std::make_tuple(_self, to, quantity, memo)
         ).send();
@@ -268,11 +388,22 @@ private:
     void verify_from_game_account(name game_account);
 
     void session_update_volume(uint64_t game_id, asset quantity) {
-        const auto itr = game_state.require_find(game_id, "game not found");
-        game_state.modify(itr, _self, [&](auto& row) {
-            row.active_sessions_sum += quantity;
+        verify_asset(quantity);
+        
+        if (quantity.symbol == core_symbol) {
+            const auto itr = game_state.require_find(game_id, "game not found");
+            game_state.modify(itr, _self, [&](auto& row) {
+                row.active_sessions_sum += quantity;
+            });
+            gstate.game_active_sessions_sum += quantity;
+        }
+
+        const auto symbol_raw = quantity.symbol.raw();
+        const auto itr_tokens = game_tokens.require_find(game_id, "game not found");
+        game_tokens.modify(itr_tokens, _self, [&](auto& row) {
+            row.active_sessions_sum[symbol_raw] += quantity.amount;
         });
-        gstate.game_active_sessions_sum += quantity;
+        gtokens.game_active_sessions_sum[symbol_raw] += quantity.amount;
     }
 
     void session_update_amount(uint64_t game_id) {
@@ -283,19 +414,32 @@ private:
         gstate.active_sessions_amount++;
     }
 
-    void session_close(uint64_t game_id, asset quantity) {
+    void session_close_internal(uint64_t game_id, asset quantity) {
+        verify_asset(quantity);
+        const auto symbol_raw = quantity.symbol.raw();
         const auto itr = game_state.require_find(game_id, "game not found");
-        check(quantity <= itr->active_sessions_sum, "invalid quantity in session close");
-        check(quantity <= gstate.game_active_sessions_sum, "invalid quantity in session close");
+        const auto itr_tokens = game_tokens.require_find(game_id, "game not found");
+        check(quantity.amount <= itr_tokens->active_sessions_sum.at(symbol_raw), "invalid quantity in session close");
+        check(quantity.amount <= gtokens.game_active_sessions_sum[symbol_raw], "invalid quantity in session close");
         check(itr->active_sessions_amount, "no active sessions");
         check(gstate.active_sessions_amount, "no active sesions");
 
         game_state.modify(itr, _self, [&](auto& row) {
-            row.active_sessions_sum -= quantity;
             row.active_sessions_amount--;
         });
-        gstate.game_active_sessions_sum -= quantity;
         gstate.active_sessions_amount--;
+
+        if (quantity.symbol == core_symbol) {
+            gstate.game_active_sessions_sum -= quantity;
+            game_state.modify(itr, _self, [&](auto& row) {
+                row.active_sessions_sum -= quantity;
+            });
+        }
+        
+        game_tokens.modify(itr_tokens, _self, [&](auto& row) {
+            row.active_sessions_sum[symbol_raw] -= quantity.amount;
+        });
+        gtokens.game_active_sessions_sum[symbol_raw] -= quantity.amount;
     }
 
     player_stats_table::const_iterator get_or_create_player_stat(name player_account) {
@@ -315,6 +459,23 @@ private:
         return itr;
     }
 
+    player_tokens_table::const_iterator get_or_create_player_tokens(name player_account) {
+        const auto itr = player_tokens.find(player_account.value);
+        if (itr == player_tokens.end()) {
+            return player_tokens.emplace(_self, [&](auto& row) {
+                row = player_tokens_row {
+                    player_account,
+                    {},
+                    {},
+                    {},
+                    {},
+                    {}
+                };
+            });
+        }
+        return itr;
+    }    
+
     name get_platform() const {
         check(gstate.platform != name(), "platform name wasn't set");
         return gstate.platform;
@@ -323,17 +484,43 @@ private:
     void check_from_platform_game() const { eosio::require_auth({get_platform(), platform_game_permission}); }
 
     void create_or_update_bonus_balance(name player, asset amount) {
-        const auto itr = bonus_balance.find(player.value);
-        if (itr == bonus_balance.end()) {
-            bonus_balance.emplace(_self, [&](auto& row) {
-                row.player = player;
-                row.balance = amount;
-            });
-        } else {
-            bonus_balance.modify(itr, _self, [&](auto& row) {
-                row.balance += amount;
-            });
+        verify_asset(amount);
+
+        if (amount.symbol == core_symbol) {
+            const auto itr = bonus_balance.find(player.value);
+            if (itr == bonus_balance.end()) {
+                bonus_balance.emplace(_self, [&](auto& row) {
+                    row.player = player;
+                    row.balance = amount;
+                });
+            } else {
+                bonus_balance.modify(itr, _self, [&](auto& row) {
+                    row.balance += amount;
+                });
+            }
         }
+        
+        const auto symbol_raw = amount.symbol.raw();
+        const auto itr_tokens = get_or_create_player_tokens(player);
+        player_tokens.modify(itr_tokens, _self, [&](auto& row) {
+            row.bonus_balance[symbol_raw] += amount.amount;
+        });
+    }
+
+    token_table::const_iterator get_token_itr(const std::string& token_name) const {
+        return tokens.require_find(platform::get_token_pk(token_name), "token is not supported");
+    }
+
+    void verify_token(const std::string& token) const {
+        platform::read::verify_token(get_platform(), token);
+        check(!get_token_itr(token)->paused, "token is paused");
+    }
+
+    void verify_asset(const asset& asset) const {
+        const auto& token = asset.symbol.code().to_string();
+        verify_token(token);
+        const auto symbol = token::get_symbol(get_platform(), token);
+        check(asset.symbol == symbol, "incorrect asset symbol");
     }
 };
 
@@ -352,17 +539,3 @@ namespace read {
 } // ns read
 
 } // namespace casino
-
-namespace token {
-    struct account {
-        eosio::asset balance;
-        uint64_t primary_key() const { return balance.symbol.raw(); }
-    };
-
-    typedef eosio::multi_index<"accounts"_n, account> accounts;
-
-    eosio::asset get_balance(eosio::name account, eosio::symbol s) {
-        accounts accountstable("eosio.token"_n, account.value);
-        return accountstable.get(s.code().raw()).balance;
-    }
-}

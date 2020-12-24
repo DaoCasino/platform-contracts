@@ -33,20 +33,7 @@ namespace testing {
 
 class basic_tester : public TESTER {
 public:
-    basic_tester() {
-        produce_blocks( 2 );
-
-        create_accounts({
-            N(eosio.token)
-        });
-
-        produce_blocks( 100 );
-        deploy_contract<contracts::system::token>(N(eosio.token));
-
-        symbol core_symbol = symbol{CORE_SYM};
-        create_currency( N(eosio.token), config::system_account_name, asset(100000000000000, core_symbol) );
-        issue(config::system_account_name, asset(1672708210000, core_symbol) );
-    }
+    basic_tester() {}
 
     template <typename Contract>
     void deploy_contract(account_name account) {
@@ -69,8 +56,9 @@ public:
         return push_action(contract, N(create), contract, act);
     }
 
-    action_result issue( const name& to, const asset& amount, const name& manager = config::system_account_name ) {
-        return push_action( N(eosio.token), N(issue), manager, mutable_variant_object()
+    action_result issue( const name& to, const asset& amount, const name& manager = config::system_account_name, 
+        const name& contract = N(eosio.token)) {
+        return push_action( contract, N(issue), manager, mutable_variant_object()
                                 ("to",       to)
                                 ("quantity", amount)
                                 ("memo",     "") );
@@ -95,6 +83,9 @@ public:
         return base_tester::push_action( std::move(act), actor);
    }
 
+    asset asset_from_string(const std::string& s) {
+        return sym::from_string(s);
+    }
 public:
     std::map<account_name, abi_serializer> abi_ser;
 };
