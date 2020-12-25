@@ -14,6 +14,15 @@ namespace token {
 
     typedef eosio::multi_index<"accounts"_n, account> accounts;
 
+    struct currency_stats {
+        eosio::asset    supply;
+        eosio::asset    max_supply;
+        eosio::name     issuer;
+        uint64_t primary_key() const { return supply.symbol.code().raw(); }
+    };
+
+    typedef eosio::multi_index<"stat"_n, currency_stats> stats;
+
     eosio::asset get_balance(eosio::name platform, eosio::name account, eosio::symbol s) {
         platform::token_table tokens(platform, platform.value);
         auto it = tokens.require_find(s.code().raw(), "token is not in the list");
@@ -25,8 +34,8 @@ namespace token {
         const auto sc = eosio::symbol_code(token);
         platform::token_table tokens(platform, platform.value);
         auto it = tokens.require_find(sc.raw(), "token is not in the list");
-        accounts accountstable(it->contract, "eosio"_n.value);
-        return accountstable.get(sc.raw()).balance.symbol;
+        stats currencytable(it->contract, sc.raw());
+        return currencytable.get(sc.raw()).supply.symbol;
     }
 } // namespace token
 
