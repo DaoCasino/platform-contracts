@@ -451,6 +451,19 @@ private:
         gtokens.game_active_sessions_sum[symbol_raw] -= quantity.amount;
     }
 
+    void reward_game_developer(uint64_t game_id) {
+        const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
+        for (auto it = tokens.begin(); it != tokens.end(); it++) {
+            const auto to_transfer = get_balance(game_id, it->token_name);
+            if (to_transfer.amount <= 0) {
+                continue;
+            }
+            transfer(beneficiary, to_transfer, "game developer profits");
+            sub_balance(game_id, to_transfer);
+        }
+        update_last_claim_time(game_id);
+    }
+
     player_stats_table::const_iterator get_or_create_player_stat(name player_account) {
         const auto itr = player_stats.find(player_account.value);
         if (itr == player_stats.end()) {
