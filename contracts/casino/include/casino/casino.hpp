@@ -276,6 +276,9 @@ public:
     [[eosio::action("pausetoken")]]
     void pause_token(std::string token_name, bool pause);
 
+    [[eosio::action("migratetoken")]]
+    void migrate_token();
+
     // ==========================
     // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;

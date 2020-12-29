@@ -35,12 +35,14 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
         zero_asset
     });
 
+    const auto symbol_raw = core_symbol.raw();
+
     gtokens = _gtokens.get_or_create(_self, global_tokens_state{
-        {},
-        {},
-        {},
-        {},
-        {{core_symbol.raw(), current_time_point()}}
+        {{symbol_raw, gstate.game_active_sessions_sum.amount}},
+        {{symbol_raw, gstate.game_profits_sum.amount}},
+        {{symbol_raw, bstate.total_allocated.amount}},
+        {{symbol_raw, bstate.greeting_bonus.amount}},
+        {{symbol_raw, current_time_point()}}
     });
 }
 
@@ -471,6 +473,70 @@ void casino::pause_token(std::string token_name, bool pause) {
     tokens.modify(get_token_itr(token_name), get_self(), [&](auto& row) {
         row.paused = pause;
     });
+}
+
+void casino::migrate_token() {
+    const auto limit_write = 100; // harcoded limit
+    auto write_count = 0;    
+    const auto symbol_raw = core_symbol.raw();
+
+    // game state
+    for (auto it = game_state.begin(); it != game_state.end(); ++it) {
+        if (game_tokens.find(it->game_id) != game_tokens.end()) {
+            continue;
+        }
+        ++write_count;
+        game_tokens.emplace(get_self(), [&](auto& row) {
+            row.game_id = it->game_id;
+            row.balance[symbol_raw] = it->balance.amount;
+            row.active_sessions_sum[symbol_raw] = it->active_sessions_sum.amount;
+        });
+        if (write_count >= limit_write) {
+            return;
+        }
+    }
+
+    // bonus balances
+    for (auto it = bonus_balance.begin(); it != bonus_balance.end(); ++it) {
+        if (player_tokens.find(it->player.value) != player_tokens.end()) {
+            continue;
+        }
+        ++write_count;
+        const auto it_stats = player_stats.find(it->player.value);
+        player_tokens.emplace(get_self(), [&](auto& row) {
+            row.player = it->player;
+            row.bonus_balance[symbol_raw] = it->balance.amount;
+            if (it_stats != player_stats.end()) {
+                row.volume_real[symbol_raw] = it_stats->volume_real.amount;
+                row.volume_bonus[symbol_raw] = it_stats->volume_bonus.amount;
+                row.profit_real[symbol_raw] = it_stats->profit_real.amount;
+                row.profit_bonus[symbol_raw] = it_stats->profit_bonus.amount;
+            }
+        });
+        if (write_count >= limit_write) {
+            return;
+        }
+    }
+
+    // player stats, some player has stats and not bonus
+    for (auto it = player_stats.begin(); it != player_stats.end(); ++it) {
+        if (player_tokens.find(it->player.value) != player_tokens.end()) {
+            continue;
+        }
+        ++write_count;
+        player_tokens.emplace(get_self(), [&](auto& row) {
+            row.player = it->player;
+            row.volume_real[symbol_raw] = it->volume_real.amount;
+            row.volume_bonus[symbol_raw] = it->volume_bonus.amount;
+            row.profit_real[symbol_raw] = it->profit_real.amount;
+            row.profit_bonus[symbol_raw] = it->profit_bonus.amount;
+        });
+        if (write_count >= limit_write) {
+            return;
+        }
+    }
+
+    check(false, "migration ends!");
 }
 
 } // namespace casino
