@@ -475,9 +475,7 @@ void casino::pause_token(std::string token_name, bool pause) {
     });
 }
 
-void casino::migrate_token() {
-    const auto limit_write = 100; // harcoded limit
-    auto write_count = 0;    
+void casino::migrate_token() {  
     const auto symbol_raw = core_symbol.raw();
 
     // game state
@@ -485,15 +483,11 @@ void casino::migrate_token() {
         if (game_tokens.find(it->game_id) != game_tokens.end()) {
             continue;
         }
-        ++write_count;
         game_tokens.emplace(get_self(), [&](auto& row) {
             row.game_id = it->game_id;
             row.balance[symbol_raw] = it->balance.amount;
             row.active_sessions_sum[symbol_raw] = it->active_sessions_sum.amount;
         });
-        if (write_count >= limit_write) {
-            return;
-        }
     }
 
     // bonus balances
@@ -501,7 +495,6 @@ void casino::migrate_token() {
         if (player_tokens.find(it->player.value) != player_tokens.end()) {
             continue;
         }
-        ++write_count;
         const auto it_stats = player_stats.find(it->player.value);
         player_tokens.emplace(get_self(), [&](auto& row) {
             row.player = it->player;
@@ -513,9 +506,6 @@ void casino::migrate_token() {
                 row.profit_bonus[symbol_raw] = it_stats->profit_bonus.amount;
             }
         });
-        if (write_count >= limit_write) {
-            return;
-        }
     }
 
     // player stats, some player has stats and not bonus
@@ -523,7 +513,6 @@ void casino::migrate_token() {
         if (player_tokens.find(it->player.value) != player_tokens.end()) {
             continue;
         }
-        ++write_count;
         player_tokens.emplace(get_self(), [&](auto& row) {
             row.player = it->player;
             row.volume_real[symbol_raw] = it->volume_real.amount;
@@ -531,12 +520,7 @@ void casino::migrate_token() {
             row.profit_real[symbol_raw] = it->profit_real.amount;
             row.profit_bonus[symbol_raw] = it->profit_bonus.amount;
         });
-        if (write_count >= limit_write) {
-            return;
-        }
     }
-
-    check(false, "migration ends!");
 }
 
 } // namespace casino
