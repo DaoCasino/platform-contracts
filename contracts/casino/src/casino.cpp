@@ -87,6 +87,7 @@ void casino::remove_game(uint64_t game_id) {
     const auto game_state_itr = game_state.require_find(game_id, "game is not in game state");
     const auto game_tokens_itr = game_tokens.require_find(game_id, "game is not in game tokens");
     check(!game_state_itr->active_sessions_amount, "trying to remove a game with non-zero active sessions");
+    reward_game_developer(game_id);
     game_tokens.erase(game_tokens_itr);
     game_state.erase(game_state_itr);
     games.erase(game_itr);
@@ -135,14 +136,7 @@ void casino::claim_profit(name game_account) {
     const auto ct = current_time_point();
     const auto game_id = get_game_id(game_account);
     check(ct - get_last_claim_time(game_id) > microseconds(useconds_per_month), "already claimed within past month");
-    const auto beneficiary = platform::read::get_game(get_platform(), game_id).beneficiary;
-    for (auto it = tokens.begin(); it != tokens.end(); it++) {
-        const auto to_transfer = get_balance(game_id, it->token_name);
-        check(to_transfer.amount > 0, "cannot claim a negative profit");
-        transfer(beneficiary, to_transfer, "game developer profits");
-        sub_balance(game_id, to_transfer);
-    }
-    update_last_claim_time(game_id);
+    reward_game_developer(game_id);
 }
 
 uint64_t casino::get_game_id(name game_account) {
