@@ -476,6 +476,7 @@ void casino::pause_token(std::string token_name, bool pause) {
 }
 
 void casino::migrate_token() {  
+    require_auth(get_owner());
     const auto symbol_raw = core_symbol.raw();
 
     // game state
