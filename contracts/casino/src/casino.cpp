@@ -16,7 +16,8 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     tokens(_self, _self.value),
     game_tokens(_self, _self.value),
     _gtokens(_self, _self.value),
-    player_tokens(_self, _self.value) {
+    player_tokens(_self, _self.value),
+    game_params(_self, _self.value) {
     
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -44,6 +45,17 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
         {{symbol_raw, bstate.greeting_bonus.amount}},
         {{symbol_raw, current_time_point()}}
     });
+
+    // init game params for "BET"
+    for (auto it = games.begin(); it != games.end(); ++it) {
+        if (game_params.find(it->game_id) != game_params.end()) {
+            continue;
+        }
+        game_params.emplace(get_self(), [&](auto& row) {
+            row.game_id = it->game_id;
+            row.params = {{core_symbol.code().raw(), it->params}};
+        });
+    }
 }
 
 void casino::set_platform(name platform_name) {
@@ -73,13 +85,22 @@ void casino::add_game(uint64_t game_id, game_params_type params) {
         row.balance = {};
         row.active_sessions_sum = {};
     });
+    game_params.emplace(get_self(), [&](auto& row) {
+        row.game_id = game_id;
+        row.params = {{core_symbol.code().raw(), params}};
+    });
 }
 
 void casino::set_game_param(uint64_t game_id, game_params_type params) {
     require_auth(get_owner());
     const auto itr = games.require_find(game_id, "id not in the games list");
+    const auto itr_token = game_params.require_find(game_id, "id not in the game params list");
+
     games.modify(itr, get_self(), [&](auto& row) {
         row.params = params;
+    });
+    game_params.modify(itr_token, get_self(), [&](auto& row) {
+        row.params[core_symbol.code().raw()] = params;
     });
 }
 
@@ -88,8 +109,10 @@ void casino::remove_game(uint64_t game_id) {
     const auto game_itr = games.require_find(game_id, "the game was not added");
     const auto game_state_itr = game_state.require_find(game_id, "game is not in game state");
     const auto game_tokens_itr = game_tokens.require_find(game_id, "game is not in game tokens");
+    const auto game_params_itr = game_params.require_find(game_id, "game is not in game params");
     check(!game_state_itr->active_sessions_amount, "trying to remove a game with non-zero active sessions");
     reward_game_developer(game_id);
+    game_params.erase(game_params_itr);
     game_tokens.erase(game_tokens_itr);
     game_state.erase(game_state_itr);
     games.erase(game_itr);
@@ -460,6 +483,11 @@ void casino::add_token(std::string token_name) {
 void casino::remove_token(std::string token_name) {
     require_auth(get_self());
     tokens.erase(get_token_itr(token_name));
+    for (auto it = game_params.begin(); it != game_params.end(); ++it) {
+        game_params.modify(it, get_self(), [&](auto& row) {
+            row.params.erase(platform::get_token_pk(token_name));
+        });
+    }
 }
 
 void casino::pause_token(std::string token_name, bool pause) {
@@ -469,53 +497,20 @@ void casino::pause_token(std::string token_name, bool pause) {
     });
 }
 
-void casino::migrate_token() {  
+void casino::set_game_param_token(uint64_t game_id, std::string token, game_params_type params) {
+    verify_token(token);
+    if (token == "BET") {
+        set_game_param(game_id, params);
+        return;
+    }
     require_auth(get_owner());
-    const auto symbol_raw = core_symbol.raw();
 
-    // game state
-    for (auto it = game_state.begin(); it != game_state.end(); ++it) {
-        if (game_tokens.find(it->game_id) != game_tokens.end()) {
-            continue;
-        }
-        game_tokens.emplace(get_self(), [&](auto& row) {
-            row.game_id = it->game_id;
-            row.balance[symbol_raw] = it->balance.amount;
-            row.active_sessions_sum[symbol_raw] = it->active_sessions_sum.amount;
-        });
-    }
+    const auto itr_token = game_params.require_find(game_id, "id is not found in game params");
+    const auto token_raw = platform::get_token_pk(token);
 
-    // bonus balances
-    for (auto it = bonus_balance.begin(); it != bonus_balance.end(); ++it) {
-        if (player_tokens.find(it->player.value) != player_tokens.end()) {
-            continue;
-        }
-        const auto it_stats = player_stats.find(it->player.value);
-        player_tokens.emplace(get_self(), [&](auto& row) {
-            row.player = it->player;
-            row.bonus_balance[symbol_raw] = it->balance.amount;
-            if (it_stats != player_stats.end()) {
-                row.volume_real[symbol_raw] = it_stats->volume_real.amount;
-                row.volume_bonus[symbol_raw] = it_stats->volume_bonus.amount;
-                row.profit_real[symbol_raw] = it_stats->profit_real.amount;
-                row.profit_bonus[symbol_raw] = it_stats->profit_bonus.amount;
-            }
-        });
-    }
-
-    // player stats, some player has stats and not bonus
-    for (auto it = player_stats.begin(); it != player_stats.end(); ++it) {
-        if (player_tokens.find(it->player.value) != player_tokens.end()) {
-            continue;
-        }
-        player_tokens.emplace(get_self(), [&](auto& row) {
-            row.player = it->player;
-            row.volume_real[symbol_raw] = it->volume_real.amount;
-            row.volume_bonus[symbol_raw] = it->volume_bonus.amount;
-            row.profit_real[symbol_raw] = it->profit_real.amount;
-            row.profit_bonus[symbol_raw] = it->profit_bonus.amount;
-        });
-    }
+    game_params.modify(itr_token, get_self(), [&](auto& row) {
+        row.params[token_raw] = params;
+    }); 
 }
 
 } // namespace casino

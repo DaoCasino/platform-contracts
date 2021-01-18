@@ -1,9 +1,11 @@
 #include "basic_tester.hpp"
+#include <iostream>
 
 
 namespace testing {
 
 using bytes = std::vector<char>;
+using game_params_type = std::vector<std::pair<uint16_t, uint64_t>>;
 
 static constexpr int64_t seconds_per_day = 24 * 3600;
 static constexpr int64_t seconds_per_month = 30 * seconds_per_day;
@@ -181,6 +183,25 @@ public:
         throw std::runtime_error("symbol not found");
     }
 
+    game_params_type get_game_params(uint64_t game_id, const std::string& token = "BET") {
+        game_params_type params = {};
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(gameparams), game_id);
+        if (data.empty()) {
+            return params;
+        }
+        const auto params_raw = abi_ser[casino_account].binary_to_variant("game_params_row", data, abi_serializer_max_time)["params"];
+        const auto token_raw = get_token_pk(token);
+        for (auto& it : params_raw.as<vector<fc::variant>>()) {
+            if (it["key"].as<uint64_t>() == token_raw) {
+                for (auto& pair: it["value"].as<vector<fc::variant>>()) {
+                    params.push_back({pair["first"].as<uint16_t>(), pair["second"].as<uint64_t>()});
+                }
+                return params;
+            }
+        }
+        return params;
+    }
+
     void allow_token(const std::string& token_name, uint8_t precision, name contract) {
         create_account(contract);
         deploy_contract<contracts::system::token>(contract);
@@ -218,8 +239,6 @@ public:
 
 const account_name casino_tester::casino_account = N(dao.casino);
 const account_name casino_tester::undefined_acc = N(undefined);
-
-using game_params_type = std::vector<std::pair<uint16_t, uint32_t>>;
 
 BOOST_AUTO_TEST_SUITE(casino_tests)
 
@@ -1798,6 +1817,50 @@ BOOST_FIXTURE_TEST_CASE(claim_profit_on_game_remove, casino_tester) try {
     BOOST_REQUIRE_EQUAL(get_balance(casino_account, kek_symbol), ASSET("305.00000 KEK"));
     BOOST_REQUIRE_EQUAL(get_balance(game_beneficiary_account, kek_symbol), ASSET("5.00000 KEK"));
     BOOST_REQUIRE_EQUAL(get_balance(game_account, kek_symbol), ASSET("0.00000 KEK"));
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(set_params_test, casino_tester) try {
+    const auto expected_params = game_params_type{{0, 0}};
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(platform_name, N(addgame), platform_name, mvo()
+            ("contract", casino_account)
+            ("params_cnt", 1)
+            ("meta", bytes())
+        )
+    );
+
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(addgame), casino_account, mvo()
+            ("game_id", 0)
+            ("params", expected_params)
+        )
+    );
+
+    auto require_equal_game_params = [](const auto& params, const auto& expected_params) {
+        BOOST_REQUIRE_EQUAL(params.size(), expected_params.size());
+        for (int i = 0; i < params.size(); ++i) {
+            BOOST_REQUIRE_EQUAL(params[i].first, expected_params[i].first);
+            BOOST_REQUIRE_EQUAL(params[i].second, expected_params[i].second);
+        }
+    };
+
+    const auto params = get_game_params(0);
+    require_equal_game_params(params, expected_params);
+
+    const auto kek_token = "KEK";
+    allow_token(kek_token, 4, N(token.kek));
+    const auto expected_params_kek = game_params_type{{0, 0}, {1, 2}};
+    BOOST_REQUIRE_EQUAL(success(),
+        push_action(casino_account, N(setgameparam2), casino_account, mvo()
+            ("game_id", 0)
+            ("token", "KEK")
+            ("params", expected_params_kek)
+        )
+    );
+
+    const auto params_kek = get_game_params(0, kek_token);
+    require_equal_game_params(params_kek, expected_params_kek);
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

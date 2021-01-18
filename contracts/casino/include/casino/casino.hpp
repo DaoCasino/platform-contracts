@@ -172,6 +172,16 @@ struct [[eosio::table("playertokens"), eosio::contract("casino")]] player_tokens
 };
 
 using player_tokens_table = eosio::multi_index<"playertokens"_n, player_tokens_row>;
+
+struct [[eosio::table("gameparams"), eosio::contract("casino")]] game_params_row {
+    uint64_t game_id;
+
+    std::map<uint64_t, game_params_type> params; // key is token in uint64_t
+
+    uint64_t primary_key() const { return game_id; }
+};
+
+using game_params_table = eosio::multi_index<"gameparams"_n, game_params_row>;
  
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
@@ -276,8 +286,8 @@ public:
     [[eosio::action("pausetoken")]]
     void pause_token(std::string token_name, bool pause);
 
-    [[eosio::action("migratetoken")]]
-    void migrate_token();
+    [[eosio::action("setgameparam2")]]
+    void set_game_param_token(uint64_t game_id, std::string token, game_params_type params);
 
     // ==========================
     // constants
@@ -314,6 +324,7 @@ private:
     global_tokens_singleton _gtokens;
     global_tokens_state gtokens;
     player_tokens_table player_tokens;
+    game_params_table game_params;
 
     name get_owner() const {
         return gstate.owner;
