@@ -1,5 +1,4 @@
 #include "basic_tester.hpp"
-#include <iostream>
 
 
 namespace testing {
