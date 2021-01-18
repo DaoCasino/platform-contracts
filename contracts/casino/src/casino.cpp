@@ -483,9 +483,10 @@ void casino::add_token(std::string token_name) {
 void casino::remove_token(std::string token_name) {
     require_auth(get_self());
     tokens.erase(get_token_itr(token_name));
+    const auto token_raw = platform::get_token_pk(token_name);
     for (auto it = game_params.begin(); it != game_params.end(); ++it) {
         game_params.modify(it, get_self(), [&](auto& row) {
-            row.params.erase(platform::get_token_pk(token_name));
+            row.params.erase(token_raw);
         });
     }
 }
@@ -506,10 +507,8 @@ void casino::set_game_param_token(uint64_t game_id, std::string token, game_para
     require_auth(get_owner());
 
     const auto itr_token = game_params.require_find(game_id, "id is not found in game params");
-    const auto token_raw = platform::get_token_pk(token);
-
     game_params.modify(itr_token, get_self(), [&](auto& row) {
-        row.params[token_raw] = params;
+        row.params[platform::get_token_pk(token)] = params;
     }); 
 }
 
