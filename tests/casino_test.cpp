@@ -182,6 +182,14 @@ public:
         throw std::runtime_error("symbol not found");
     }
 
+    game_params_type extract_game_params(const fc::variant& data) {
+        game_params_type params = {};
+        for (auto& pair: data.as<vector<fc::variant>>()) {
+            params.push_back({pair["first"].as<uint16_t>(), pair["second"].as<uint64_t>()});
+        }
+        return params;
+    }
+
     game_params_type get_game_params(uint64_t game_id, const std::string& token = "BET") {
         game_params_type params = {};
         vector<char> data = get_row_by_account(casino_account, casino_account, N(gameparams), game_id);
@@ -192,10 +200,7 @@ public:
         const auto token_raw = get_token_pk(token);
         for (auto& it : params_raw.as<vector<fc::variant>>()) {
             if (it["key"].as<uint64_t>() == token_raw) {
-                for (auto& pair: it["value"].as<vector<fc::variant>>()) {
-                    params.push_back({pair["first"].as<uint16_t>(), pair["second"].as<uint64_t>()});
-                }
-                return params;
+                return extract_game_params(it["value"]);
             }
         }
         return params;
