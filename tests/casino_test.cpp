@@ -1836,16 +1836,8 @@ BOOST_FIXTURE_TEST_CASE(set_params_test, casino_tester) try {
         )
     );
 
-    auto require_equal_game_params = [](const auto& params, const auto& expected_params) {
-        BOOST_REQUIRE_EQUAL(params.size(), expected_params.size());
-        for (int i = 0; i < params.size(); ++i) {
-            BOOST_REQUIRE_EQUAL(params[i].first, expected_params[i].first);
-            BOOST_REQUIRE_EQUAL(params[i].second, expected_params[i].second);
-        }
-    };
-
     const auto params = get_game_params(0);
-    require_equal_game_params(params, expected_params);
+    BOOST_REQUIRE_EQUAL(params, expected_params);
 
     const auto kek_token = "KEK";
     allow_token(kek_token, 4, N(token.kek));
@@ -1859,9 +1851,18 @@ BOOST_FIXTURE_TEST_CASE(set_params_test, casino_tester) try {
     );
 
     const auto params_kek = get_game_params(0, kek_token);
-    require_equal_game_params(params_kek, expected_params_kek);
+    BOOST_REQUIRE_EQUAL(params_kek, expected_params_kek);
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
 
 } // namespace testing
+
+namespace std {
+    std::ostream& operator<<(std::ostream& os, const testing::game_params_type& params) {
+        for (auto pair: params) {
+            os << pair.first << ":" << pair.second << " ";
+        }
+        return os;
+    }
+}
