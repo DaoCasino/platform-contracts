@@ -286,6 +286,9 @@ public:
     [[eosio::action("pausetoken")]]
     void pause_token(std::string token_name, bool pause);
 
+    [[eosio::action("migratetoken")]]
+    void migrate_token();
+
     [[eosio::action("setgameparam2")]]
     void set_game_param_token(uint64_t game_id, std::string token, game_params_type params);
 
