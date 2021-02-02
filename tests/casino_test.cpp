@@ -239,6 +239,11 @@ public:
                                 ("quantity", amount)
                                 ("memo",     memo) );
     }
+
+    bool is_player_banned(const name player) {
+        vector<char> data = get_row_by_account(casino_account, casino_account, N(banlist), player.value );
+        return data.empty() ? false : true;
+    }
 };
 
 const account_name casino_tester::casino_account = N(dao.casino);
@@ -1857,6 +1862,26 @@ BOOST_FIXTURE_TEST_CASE(set_params_test, casino_tester) try {
 
     const auto params_kek = get_game_params(0, kek_token);
     BOOST_REQUIRE_EQUAL(params_kek, expected_params_kek);
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(ban_player_test, casino_tester) try {
+    const name player = N(player);
+
+    BOOST_REQUIRE_EQUAL(false, is_player_banned(player));
+
+    BOOST_REQUIRE_EQUAL(
+        success(),
+        push_action(casino_account, N(banplayer), casino_account, mvo()("player", player))
+    );
+
+    BOOST_REQUIRE_EQUAL(true, is_player_banned(player));
+
+    BOOST_REQUIRE_EQUAL(
+        success(),
+        push_action(casino_account, N(unbanplayer), casino_account, mvo()("player", player))
+    );
+
+    BOOST_REQUIRE_EQUAL(false, is_player_banned(player));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()
