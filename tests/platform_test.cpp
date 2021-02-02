@@ -47,6 +47,11 @@ public:
         vector<char> data = get_row_by_account(platform_name, platform_name, N(token), pk);
         return data.empty() ? fc::variant() : abi_ser[platform_name].binary_to_variant("token_row", data, abi_serializer_max_time);
     }
+
+    bool is_player_banned(const name player) {
+        vector<char> data = get_row_by_account(platform_name, platform_name, N(banlist), player.value );
+        return data.empty() ? false : true;
+    }
 };
 
 const account_name platform_tester::platform_name = N(platform);
@@ -501,6 +506,26 @@ BOOST_FIXTURE_TEST_CASE(add_del_token, platform_tester) try {
         )
     );
 
+} FC_LOG_AND_RETHROW()
+
+BOOST_FIXTURE_TEST_CASE(ban_player_test, platform_tester) try {
+    const name player = N(player);
+
+    BOOST_REQUIRE_EQUAL(false, is_player_banned(player));
+
+    BOOST_REQUIRE_EQUAL(
+        success(),
+        push_action(platform_name, N(banplayer), platform_name, mvo()("player", player))
+    );
+
+    BOOST_REQUIRE_EQUAL(true, is_player_banned(player));
+
+    BOOST_REQUIRE_EQUAL(
+        success(),
+        push_action(platform_name, N(unbanplayer), platform_name, mvo()("player", player))
+    );
+
+    BOOST_REQUIRE_EQUAL(false, is_player_banned(player));
 } FC_LOG_AND_RETHROW()
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -82,6 +82,14 @@ struct [[eosio::table("token"), eosio::contract("platform")]] token_row {
 
 using token_table = eosio::multi_index<"token"_n, token_row>;
 
+struct [[eosio::table("banlist"), eosio::contract("platform")]] ban_list_row {
+    name player;
+
+    uint64_t primary_key() const { return player.value; }
+};
+
+using ban_list_table = eosio::multi_index<"banlist"_n, ban_list_row>;
+
 class [[eosio::contract("platform")]] platform: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -137,12 +145,19 @@ public:
     [[eosio::action("deltoken")]]
     void del_token(std::string token_name);
 
+    [[eosio::action("banplayer")]]
+    void ban_player(name player);
+
+    [[eosio::action("unbanplayer")]]
+    void unban_player(name player);
+
 private:
     version_singleton version;
     global_singleton global;
     casino_table casinos;
     game_table games;
     token_table tokens;
+    ban_list_table ban_list;
 };
 
 

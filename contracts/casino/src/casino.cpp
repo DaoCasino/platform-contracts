@@ -17,8 +17,7 @@ casino::casino(name receiver, name code, eosio::datastream<const char*> ds):
     game_tokens(_self, _self.value),
     _gtokens(_self, _self.value),
     player_tokens(_self, _self.value),
-    game_params(_self, _self.value),
-    ban_list(_self, _self.value) {
+    game_params(_self, _self.value) {
     
     version.set(version_row {CONTRACT_VERSION}, _self);
 
@@ -560,22 +559,6 @@ void casino::set_game_param_token(uint64_t game_id, std::string token, game_para
     game_params.modify(itr_token, get_self(), [&](auto& row) {
         row.params[platform::get_token_pk(token)] = params;
     }); 
-}
-
-void casino::ban_player(name player) {
-    require_auth(get_owner());
-    const auto it = ban_list.find(player.value);
-    eosio::check(it == ban_list.end(), "player is already banned");
-    ban_list.emplace(get_self(), [&](auto& row) {
-        row.player = player;
-    });
-}
-
-void casino::unban_player(name player) {
-    require_auth(get_owner());
-    const auto it = ban_list.find(player.value);
-    eosio::check(it != ban_list.end(), "player is not banned");
-    ban_list.erase(it);
 }
 
 } // namespace casino

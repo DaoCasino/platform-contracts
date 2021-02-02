@@ -183,14 +183,6 @@ struct [[eosio::table("gameparams"), eosio::contract("casino")]] game_params_row
 
 using game_params_table = eosio::multi_index<"gameparams"_n, game_params_row>;
 
-struct [[eosio::table("banlist"), eosio::contract("casino")]] ban_list_row {
-    name player;
-
-    uint64_t primary_key() const { return player.value; }
-};
-
-using ban_list_table = eosio::multi_index<"banlist"_n, ban_list_row>;
- 
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -301,14 +293,6 @@ public:
     void set_game_param_token(uint64_t game_id, std::string token, game_params_type params);
 
     // ==========================
-    // ban
-    [[eosio::action("banplayer")]]
-    void ban_player(name player);
-
-    [[eosio::action("unbanplayer")]]
-    void unban_player(name player);
-
-    // ==========================
     // constants
     static constexpr int64_t seconds_per_day = 24 * 3600;
     static constexpr int64_t useconds_per_day = seconds_per_day * 1000'000ll;
@@ -345,8 +329,6 @@ private:
     player_tokens_table player_tokens;
     game_params_table game_params;
     
-    ban_list_table ban_list;
-
     name get_owner() const {
         return gstate.owner;
     }
