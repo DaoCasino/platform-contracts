@@ -182,7 +182,7 @@ struct [[eosio::table("gameparams"), eosio::contract("casino")]] game_params_row
 };
 
 using game_params_table = eosio::multi_index<"gameparams"_n, game_params_row>;
- 
+
 class [[eosio::contract("casino")]] casino: public eosio::contract {
 public:
     using eosio::contract::contract;
@@ -328,7 +328,7 @@ private:
     global_tokens_state gtokens;
     player_tokens_table player_tokens;
     game_params_table game_params;
-
+    
     name get_owner() const {
         return gstate.owner;
     }

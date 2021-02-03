@@ -9,7 +9,8 @@ platform::platform(name receiver, name code, eosio::datastream<const char*> ds):
     global(_self, _self.value),
     casinos(_self, _self.value),
     games(_self, _self.value),
-    tokens(_self, _self.value)
+    tokens(_self, _self.value),
+    ban_list(_self, _self.value)
 {
     version.set(version_row {CONTRACT_VERSION}, _self);
 }
@@ -160,6 +161,22 @@ void platform::add_token(std::string token_name, name contract) {
 void platform::del_token(std::string token_name) {
     require_auth(get_self());
     tokens.erase(tokens.require_find(get_token_pk(token_name), "del token: no token found"));
+}
+
+void platform::ban_player(name player) {
+    require_auth(get_self());
+    const auto it = ban_list.find(player.value);
+    eosio::check(it == ban_list.end(), "player is already banned");
+    ban_list.emplace(get_self(), [&](auto& row) {
+        row.player = player;
+    });
+}
+
+void platform::unban_player(name player) {
+    require_auth(get_self());
+    const auto it = ban_list.find(player.value);
+    eosio::check(it != ban_list.end(), "player is not banned");
+    ban_list.erase(it);
 }
 
 } // namespace platform
